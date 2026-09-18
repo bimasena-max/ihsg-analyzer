@@ -1,0 +1,8 @@
+{
+  "functions": {
+    "pages/api/screener.js":  { "maxDuration": 60 },
+    "pages/api/chart.js":     { "maxDuration": 15 },
+    "pages/api/quote.js":     { "maxDuration": 15 },
+    "pages/api/foreign-flow.js": { "maxDuration": 15 }
+  }
+}

@@ -1,0 +1,45 @@
+# Batch harian: latih ulang mingguan, prediksi tiap hari kerja.
+# Dijalankan di GitHub Actions, bukan di Vercel — training butuh menit, bukan detik.
+name: ML harian
+
+on:
+  schedule:
+    - cron: '0 11 * * 1-5'   # 18:00 WIB, setelah bursa tutup
+  workflow_dispatch:
+
+jobs:
+  predict:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+      - name: Diagnosa akses Yahoo dari runner ini
+        run: python scripts/diagnose-yahoo.py || true
+
+      - run: pip install -r ml/requirements.txt
+
+      # Latih ulang tiap Senin saja — model tidak berubah berarti harian.
+      - name: Latih ulang (Senin)
+        if: github.event_name == 'workflow_dispatch' || fromJSON(format('{0}', github.run_number)) >= 0
+        run: |
+          if [ "$(date +%u)" = "1" ]; then
+            python ml/train.py --horizon 1 --years 3
+            python ml/train.py --horizon 2 --years 3
+          else
+            echo "Bukan Senin, lewati training."
+          fi
+
+      - name: Prediksi
+        continue-on-error: true    # model belum lolos baseline = keluar non-zero, itu wajar
+        run: |
+          python ml/predict.py --horizon 1
+          python ml/predict.py --horizon 2
+
+      - name: Commit hasil
+        run: |
+          git config user.name  "ml-bot"
+          git config user.email "ml-bot@users.noreply.github.com"
+          git add data/predictions ml/models || true
+          git diff --staged --quiet || git commit -m "chore: prediksi $(date +%F)"
+          git push || true

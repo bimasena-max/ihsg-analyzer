@@ -1,0 +1,29 @@
+# Ambil snapshot net asing IDX tiap hari kerja, commit ke data/foreign/.
+# Jalan di GitHub Actions karena Vercel serverless tidak bisa persist file
+# (lihat komentar di pages/api/foreign-flow.js). Setelah beberapa hari
+# terkumpul, `git pull` lokal + `vercel --prod` bikin datanya ikut live.
+
+name: Snapshot asing harian
+
+on:
+  schedule:
+    - cron: '0 11 * * 1-5'   # 18:00 WIB, setelah bursa tutup
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: '20' }
+
+      - run: node scripts/collect-foreign-snapshot.mjs
+
+      - name: Commit hasil
+        run: |
+          git config user.name  "foreign-flow-bot"
+          git config user.email "foreign-flow-bot@users.noreply.github.com"
+          git add data/foreign
+          git diff --staged --quiet || git commit -m "chore: snapshot asing $(date +%F)"
+          git push

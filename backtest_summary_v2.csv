@@ -1,0 +1,137 @@
+Signal,Category,Horizon,Trades,WinRate%,AvgReturn%,AvgWin%,AvgLoss%,ProfitFactor,Expectancy%,MaxLoss%,TotalReturn%
+Volume Avg Naik Terkontrol,Akumulasi,14d,5280,45.4,1.708,10.834,-5.892,1.53,1.708,-65.485,9015.76
+Volume Avg Naik Terkontrol,Akumulasi,1d,5458,37.5,-0.098,2.612,-1.726,0.91,-0.098,-20.105,-533.11
+Volume Avg Naik Terkontrol,Akumulasi,2d,5449,40.2,0.028,3.609,-2.383,1.02,0.028,-35.978,154.24
+Volume Avg Naik Terkontrol,Akumulasi,30d,5087,45.4,2.636,16.17,-8.64,1.56,2.636,-84.716,13410.69
+Volume Avg Naik Terkontrol,Akumulasi,3d,5439,41.6,0.128,4.262,-2.815,1.08,0.128,-34.617,698.53
+Volume Avg Naik Terkontrol,Akumulasi,5d,5405,43.6,0.434,5.686,-3.635,1.21,0.434,-49.645,2343.1
+Volume Avg Naik Terkontrol,Akumulasi,60d,4893,46.6,6.013,26.604,-11.953,1.94,6.013,-75.535,29422.47
+Volume Avg Naik Terkontrol,Akumulasi,7d,5381,43.8,0.682,7.006,-4.25,1.29,0.682,-49.645,3671.11
+Volume Exhaustion Bottom,Akumulasi,14d,4318,43.7,0.643,11.914,-8.098,1.14,0.643,-82.503,2776.2
+Volume Exhaustion Bottom,Akumulasi,1d,4343,35.3,-0.25,3.182,-2.124,0.82,-0.25,-33.483,-1086.44
+Volume Exhaustion Bottom,Akumulasi,2d,4340,38.8,-0.245,4.24,-3.092,0.87,-0.245,-50.15,-1064.22
+Volume Exhaustion Bottom,Akumulasi,30d,4299,42.3,1.924,19.773,-11.143,1.3,1.924,-94.268,8272.37
+Volume Exhaustion Bottom,Akumulasi,3d,4338,39.9,-0.104,5.354,-3.725,0.95,-0.104,-34.765,-452.59
+Volume Exhaustion Bottom,Akumulasi,5d,4335,41.8,0.136,6.957,-4.758,1.05,0.136,-50.15,590.27
+Volume Exhaustion Bottom,Akumulasi,60d,4127,41.6,5.072,34.313,-15.782,1.55,5.072,-92.833,20932.12
+Volume Exhaustion Bottom,Akumulasi,7d,4331,43.0,0.228,7.963,-5.599,1.07,0.228,-63.786,989.04
+Volume Spike Sideways,Akumulasi,14d,7354,43.8,1.347,9.605,-5.093,1.47,1.347,-66.15,9903.33
+Volume Spike Sideways,Akumulasi,1d,7508,36.5,0.012,2.495,-1.414,1.01,0.012,-50.15,91.27
+Volume Spike Sideways,Akumulasi,2d,7503,39.2,0.079,3.353,-2.029,1.06,0.079,-50.15,591.6
+Volume Spike Sideways,Akumulasi,30d,7204,44.2,2.63,15.778,-7.795,1.61,2.63,-74.15,18949.18
+Volume Spike Sideways,Akumulasi,3d,7492,40.0,0.097,3.938,-2.468,1.07,0.097,-50.15,728.92
+Volume Spike Sideways,Akumulasi,5d,7478,41.3,0.275,5.117,-3.138,1.15,0.275,-50.15,2057.81
+Volume Spike Sideways,Akumulasi,60d,6890,45.6,5.036,24.454,-11.224,1.82,5.036,-86.15,34695.16
+Volume Spike Sideways,Akumulasi,7d,7451,42.0,0.466,6.136,-3.648,1.22,0.466,-49.841,3472.49
+BPJS Beli Pagi Jual Sore,Intraday,14d,366,40.4,-1.031,5.987,-5.796,0.7,-1.031,-24.392,-377.39
+BPJS Beli Pagi Jual Sore,Intraday,1d,372,29.6,-0.178,2.931,-1.483,0.83,-0.178,-13.075,-66.04
+BPJS Beli Pagi Jual Sore,Intraday,2d,370,36.8,-0.385,2.656,-2.152,0.72,-0.385,-20.276,-142.29
+BPJS Beli Pagi Jual Sore,Intraday,30d,366,35.2,-2.568,8.977,-8.852,0.55,-2.568,-30.886,-939.95
+BPJS Beli Pagi Jual Sore,Intraday,3d,370,37.0,-0.242,3.783,-2.608,0.85,-0.242,-22.599,-89.43
+BPJS Beli Pagi Jual Sore,Intraday,5d,370,36.5,-0.51,4.288,-3.267,0.75,-0.51,-24.912,-188.78
+BPJS Beli Pagi Jual Sore,Intraday,60d,366,38.0,-2.629,13.274,-12.368,0.66,-2.629,-34.317,-962.32
+BPJS Beli Pagi Jual Sore,Intraday,7d,368,37.2,-0.664,4.47,-3.709,0.71,-0.664,-19.575,-244.33
+BSJP Beli Sore Jual Pagi,Intraday,14d,20059,45.0,0.862,9.969,-6.596,1.24,0.862,-73.701,17289.89
+BSJP Beli Sore Jual Pagi,Intraday,1d,20497,38.5,-0.091,2.554,-1.75,0.92,-0.091,-21.772,-1867.35
+BSJP Beli Sore Jual Pagi,Intraday,2d,20497,40.6,-0.02,3.635,-2.516,0.99,-0.02,-27.65,-403.97
+BSJP Beli Sore Jual Pagi,Intraday,30d,19524,45.5,2.222,16.054,-9.314,1.44,2.222,-86.599,43374.77
+BSJP Beli Sore Jual Pagi,Intraday,3d,20467,41.6,0.036,4.374,-3.06,1.02,0.036,-36.932,740.96
+BSJP Beli Sore Jual Pagi,Intraday,5d,20383,43.3,0.172,5.571,-3.958,1.08,0.172,-45.621,3503.81
+BSJP Beli Sore Jual Pagi,Intraday,60d,18532,44.8,4.354,25.589,-12.876,1.61,4.354,-88.991,80681.09
+BSJP Beli Sore Jual Pagi,Intraday,7d,20323,43.7,0.337,6.918,-4.761,1.13,0.337,-55.585,6855.38
+Akumulasi Tersembunyi,Pre-ARA,14d,3211,41.9,1.303,11.06,-5.748,1.39,1.303,-62.229,4183.82
+Akumulasi Tersembunyi,Pre-ARA,1d,3275,34.9,-0.051,2.907,-1.637,0.95,-0.051,-50.15,-167.07
+Akumulasi Tersembunyi,Pre-ARA,2d,3273,37.6,0.035,4.031,-2.371,1.02,0.035,-50.15,113.5
+Akumulasi Tersembunyi,Pre-ARA,30d,3145,44.1,2.734,17.071,-8.591,1.57,2.734,-64.15,8599.78
+Akumulasi Tersembunyi,Pre-ARA,3d,3270,38.7,0.069,4.513,-2.732,1.04,0.069,-50.15,224.18
+Akumulasi Tersembunyi,Pre-ARA,5d,3261,39.5,0.281,5.942,-3.414,1.14,0.281,-50.15,916.36
+Akumulasi Tersembunyi,Pre-ARA,60d,3002,44.1,5.084,27.034,-12.211,1.74,5.084,-86.15,15263.57
+Akumulasi Tersembunyi,Pre-ARA,7d,3249,39.8,0.515,7.366,-4.021,1.21,0.515,-50.399,1671.79
+Breakout Konsolidasi,Pre-ARA,14d,870,43.4,1.41,9.422,-4.745,1.53,1.41,-63.094,1226.82
+Breakout Konsolidasi,Pre-ARA,1d,902,37.1,-0.006,2.366,-1.407,0.99,-0.006,-15.511,-4.99
+Breakout Konsolidasi,Pre-ARA,2d,902,41.5,0.269,3.376,-1.931,1.24,0.269,-18.424,242.99
+Breakout Konsolidasi,Pre-ARA,30d,854,45.8,1.787,12.912,-7.609,1.43,1.787,-44.249,1525.76
+Breakout Konsolidasi,Pre-ARA,3d,902,41.7,0.425,4.187,-2.264,1.32,0.425,-21.47,383.21
+Breakout Konsolidasi,Pre-ARA,5d,898,43.2,0.441,4.711,-2.807,1.28,0.441,-30.099,396.38
+Breakout Konsolidasi,Pre-ARA,60d,823,43.6,2.345,18.512,-10.164,1.41,2.345,-68.17,1929.85
+Breakout Konsolidasi,Pre-ARA,7d,896,44.2,0.452,5.348,-3.426,1.24,0.452,-34.16,404.99
+Candle Compression,Pre-ARA,14d,4529,39.9,1.356,13.64,-6.814,1.33,1.356,-69.056,6140.45
+Candle Compression,Pre-ARA,1d,4582,30.6,0.012,3.396,-1.484,1.01,0.012,-25.15,53.54
+Candle Compression,Pre-ARA,2d,4579,34.1,0.166,4.72,-2.187,1.12,0.166,-27.494,760.53
+Candle Compression,Pre-ARA,30d,4426,42.4,3.571,21.327,-9.492,1.65,3.571,-75.08,15804.49
+Candle Compression,Pre-ARA,3d,4574,35.2,0.191,5.839,-2.874,1.1,0.191,-38.041,872.62
+Candle Compression,Pre-ARA,5d,4571,37.8,0.372,7.28,-3.819,1.16,0.372,-50.15,1699.63
+Candle Compression,Pre-ARA,60d,4200,42.8,7.041,34.351,-13.381,1.92,7.041,-86.636,29573.81
+Candle Compression,Pre-ARA,7d,4564,38.3,0.633,8.778,-4.413,1.23,0.633,-52.045,2890.54
+RSI Recovery Diam-diam,Pre-ARA,14d,6728,42.1,0.488,9.496,-6.057,1.14,0.488,-56.793,3280.06
+RSI Recovery Diam-diam,Pre-ARA,1d,6780,36.2,-0.051,2.748,-1.636,0.95,-0.051,-33.483,-345.71
+RSI Recovery Diam-diam,Pre-ARA,2d,6772,38.9,-0.104,3.421,-2.351,0.93,-0.104,-50.15,-702.13
+RSI Recovery Diam-diam,Pre-ARA,30d,6666,44.7,2.164,15.961,-8.991,1.44,2.164,-75.15,14423.78
+RSI Recovery Diam-diam,Pre-ARA,3d,6772,39.2,-0.132,4.113,-2.868,0.92,-0.132,-50.15,-894.24
+RSI Recovery Diam-diam,Pre-ARA,5d,6767,40.4,-0.019,5.346,-3.66,0.99,-0.019,-50.15,-128.02
+RSI Recovery Diam-diam,Pre-ARA,60d,6342,44.0,4.376,26.005,-12.592,1.62,4.376,-81.466,27751.37
+RSI Recovery Diam-diam,Pre-ARA,7d,6750,41.0,0.13,6.524,-4.314,1.05,0.13,-50.15,880.64
+Volume Meledak,Pre-ARA,14d,4898,41.6,1.838,14.248,-6.998,1.45,1.838,-75.15,9002.03
+Volume Meledak,Pre-ARA,1d,5008,34.9,0.029,4.019,-2.107,1.02,0.029,-50.15,143.4
+Volume Meledak,Pre-ARA,2d,5005,37.5,0.265,5.53,-2.891,1.15,0.265,-36.216,1327.16
+Volume Meledak,Pre-ARA,30d,4781,42.9,3.527,21.724,-10.156,1.61,3.527,-81.96,16861.32
+Volume Meledak,Pre-ARA,3d,4999,38.4,0.405,6.702,-3.522,1.19,0.405,-42.773,2023.93
+Volume Meledak,Pre-ARA,5d,4985,38.9,0.569,8.451,-4.449,1.21,0.569,-50.15,2834.34
+Volume Meledak,Pre-ARA,60d,4548,43.2,6.108,32.614,-14.057,1.77,6.108,-86.756,27778.07
+Volume Meledak,Pre-ARA,7d,4973,40.8,0.97,9.86,-5.163,1.32,0.97,-66.817,4822.91
+RSI-9 Pullback ke EMA5,Scalp,14d,4486,40.7,-0.201,6.746,-4.965,0.93,-0.201,-60.15,-901.63
+RSI-9 Pullback ke EMA5,Scalp,1d,4537,35.4,-0.182,1.969,-1.358,0.79,-0.182,-18.784,-825.41
+RSI-9 Pullback ke EMA5,Scalp,2d,4528,37.5,-0.276,2.551,-1.976,0.78,-0.276,-27.769,-1250.38
+RSI-9 Pullback ke EMA5,Scalp,30d,4441,40.5,0.191,11.29,-7.36,1.04,0.191,-70.912,847.28
+RSI-9 Pullback ke EMA5,Scalp,3d,4520,38.7,-0.278,3.004,-2.35,0.81,-0.278,-38.483,-1257.91
+RSI-9 Pullback ke EMA5,Scalp,5d,4503,41.2,-0.243,3.764,-3.046,0.86,-0.243,-40.789,-1095.3
+RSI-9 Pullback ke EMA5,Scalp,60d,4355,43.1,1.913,18.975,-11.0,1.31,1.913,-77.293,8329.63
+RSI-9 Pullback ke EMA5,Scalp,7d,4502,40.9,-0.285,4.617,-3.674,0.87,-0.285,-39.876,-1284.49
+Stochastic Deeply Oversold,Scalp,14d,7960,43.8,0.534,10.623,-7.344,1.13,0.534,-81.4,4247.99
+Stochastic Deeply Oversold,Scalp,1d,8058,37.3,-0.038,3.147,-1.936,0.97,-0.038,-24.892,-307.41
+Stochastic Deeply Oversold,Scalp,2d,8042,39.7,-0.094,4.083,-2.844,0.95,-0.094,-43.449,-752.71
+Stochastic Deeply Oversold,Scalp,30d,7842,43.8,1.626,17.057,-10.389,1.28,1.626,-94.745,12749.46
+Stochastic Deeply Oversold,Scalp,3d,8033,41.4,-0.115,4.711,-3.522,0.94,-0.115,-50.15,-922.5
+Stochastic Deeply Oversold,Scalp,5d,8002,43.3,0.045,6.034,-4.527,1.02,0.045,-50.15,358.64
+Stochastic Deeply Oversold,Scalp,60d,7570,44.1,4.562,28.417,-14.274,1.57,4.562,-92.042,34532.55
+Stochastic Deeply Oversold,Scalp,7d,7993,43.6,0.134,7.183,-5.324,1.04,0.134,-66.817,1069.21
+Stochastic Oversold + Naik,Scalp,14d,4261,44.4,0.364,7.962,-5.711,1.11,0.364,-50.655,1549.08
+Stochastic Oversold + Naik,Scalp,1d,4327,37.4,-0.146,2.09,-1.485,0.84,-0.146,-19.116,-633.32
+Stochastic Oversold + Naik,Scalp,2d,4321,40.6,-0.102,2.877,-2.139,0.92,-0.102,-26.952,-439.85
+Stochastic Oversold + Naik,Scalp,30d,4180,42.4,0.793,12.938,-8.136,1.17,0.793,-65.124,3314.17
+Stochastic Oversold + Naik,Scalp,3d,4314,42.0,-0.041,3.503,-2.613,0.97,-0.041,-26.919,-177.43
+Stochastic Oversold + Naik,Scalp,5d,4293,42.7,0.011,4.487,-3.328,1.01,0.011,-49.645,47.08
+Stochastic Oversold + Naik,Scalp,60d,4009,41.8,1.604,20.504,-11.974,1.23,1.604,-73.485,6430.2
+Stochastic Oversold + Naik,Scalp,7d,4283,42.8,0.025,5.336,-3.942,1.01,0.025,-49.645,105.4
+Golden Cross EMA20/50,Swing,14d,1587,44.2,1.933,12.258,-6.237,1.56,1.933,-44.268,3066.93
+Golden Cross EMA20/50,Swing,1d,1629,35.7,-0.116,3.0,-1.843,0.9,-0.116,-15.088,-188.57
+Golden Cross EMA20/50,Swing,2d,1626,39.1,0.072,4.215,-2.59,1.05,0.072,-27.615,116.42
+Golden Cross EMA20/50,Swing,30d,1503,44.7,4.433,21.316,-9.219,1.87,4.433,-56.29,6663.26
+Golden Cross EMA20/50,Swing,3d,1625,41.1,0.219,5.045,-3.15,1.12,0.219,-33.953,355.82
+Golden Cross EMA20/50,Swing,5d,1623,42.4,0.568,6.698,-3.943,1.25,0.568,-33.249,921.64
+Golden Cross EMA20/50,Swing,60d,1412,45.8,5.497,27.357,-12.939,1.78,5.497,-90.15,7761.5
+Golden Cross EMA20/50,Swing,7d,1620,41.5,0.71,8.135,-4.552,1.27,0.71,-34.59,1150.73
+MACD Crossover Bullish,Swing,14d,6105,42.3,0.713,9.692,-5.863,1.21,0.713,-66.848,4355.76
+MACD Crossover Bullish,Swing,1d,6232,35.3,-0.116,2.775,-1.695,0.89,-0.116,-25.15,-724.15
+MACD Crossover Bullish,Swing,2d,6229,38.4,-0.042,3.762,-2.412,0.97,-0.042,-27.47,-261.08
+MACD Crossover Bullish,Swing,30d,5983,44.2,2.714,16.903,-8.507,1.57,2.714,-71.097,16235.28
+MACD Crossover Bullish,Swing,3d,6228,39.3,0.003,4.534,-2.936,1.0,0.003,-38.294,15.62
+MACD Crossover Bullish,Swing,5d,6214,40.7,0.326,6.006,-3.571,1.15,0.326,-43.449,2028.76
+MACD Crossover Bullish,Swing,60d,5813,45.0,4.778,25.626,-12.292,1.71,4.778,-85.259,27777.12
+MACD Crossover Bullish,Swing,7d,6194,40.7,0.289,6.924,-4.271,1.11,0.289,-50.15,1789.82
+RSI Recovery + 2 Candle Hijau,Swing,14d,2166,48.0,1.142,9.571,-6.628,1.33,1.142,-61.664,2474.28
+RSI Recovery + 2 Candle Hijau,Swing,1d,2177,40.6,-0.014,2.747,-1.897,0.99,-0.014,-20.024,-29.52
+RSI Recovery + 2 Candle Hijau,Swing,2d,2176,43.3,0.13,3.784,-2.665,1.09,0.13,-29.961,282.66
+RSI Recovery + 2 Candle Hijau,Swing,30d,2158,49.1,1.495,13.733,-10.297,1.29,1.495,-70.761,3226.17
+RSI Recovery + 2 Candle Hijau,Swing,3d,2176,46.7,0.428,4.419,-3.068,1.26,0.428,-37.41,930.8
+RSI Recovery + 2 Candle Hijau,Swing,5d,2174,46.2,0.533,5.631,-3.851,1.26,0.533,-41.794,1157.73
+RSI Recovery + 2 Candle Hijau,Swing,60d,2064,46.4,3.457,24.014,-14.315,1.45,3.457,-77.5,7134.92
+RSI Recovery + 2 Candle Hijau,Swing,7d,2173,46.3,0.406,6.377,-4.74,1.16,0.406,-48.099,882.8
+RSI+BB Lower Bounce,Swing,14d,9369,40.0,-0.043,8.452,-5.71,0.99,-0.043,-69.381,-402.18
+RSI+BB Lower Bounce,Swing,1d,9438,33.3,-0.201,2.569,-1.582,0.81,-0.201,-50.15,-1892.76
+RSI+BB Lower Bounce,Swing,2d,9427,35.7,-0.274,3.404,-2.317,0.82,-0.274,-50.15,-2579.89
+RSI+BB Lower Bounce,Swing,30d,9297,40.1,0.692,14.199,-8.358,1.14,0.692,-92.833,6433.31
+RSI+BB Lower Bounce,Swing,3d,9414,37.5,-0.296,3.854,-2.784,0.83,-0.296,-50.15,-2791.13
+RSI+BB Lower Bounce,Swing,5d,9397,39.4,-0.17,4.997,-3.525,0.92,-0.17,-47.359,-1595.9
+RSI+BB Lower Bounce,Swing,60d,9090,42.7,2.804,22.364,-11.744,1.42,2.804,-92.833,25484.43
+RSI+BB Lower Bounce,Swing,7d,9392,39.5,-0.152,5.944,-4.131,0.94,-0.152,-59.103,-1431.52

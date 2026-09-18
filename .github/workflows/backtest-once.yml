@@ -1,0 +1,73 @@
+# Jalankan SEKALI (manual) untuk backtest 1D/2D penuh, di mesin GitHub —
+# bukan di jaringan lu yang diblokir Yahoo. GitHub-hosted runner punya IP
+# datacenter Microsoft/GitHub yang (biasanya) belum kena rate-limit dari
+# riwayat lu memukul Yahoo berkali-kali.
+#
+# Cara pakai:
+#   1. Push repo ini ke GitHub (boleh private).
+#   2. Tab "Actions" -> pilih "Backtest 1D/2D (sekali jalan)" -> "Run workflow".
+#   3. Tunggu (bisa 1-3 jam untuk 322 ticker x 3 tahun; ada 322 ticker x
+#      3 tahun harian, dengan retry+jeda supaya tidak langsung kena rate-limit
+#      dari runner GitHub juga — mereka dipakai jutaan job/hari, jadi Yahoo
+#      tetap bisa membatasi kalau terlalu ngebut).
+#   4. Kalau selesai: commit otomatis berisi data/backtest/*.json baru, plus
+#      backtest_trades_v2.csv / backtest_summary_v2.csv sebagai artifact
+#      (tidak di-commit — terlalu besar untuk riwayat git).
+#   5. Kalau GAGAL: buka log job -> bagian "KENAPA GAGAL" di backtest_bei.py
+#      akan bilang persis kategori kegagalannya (rate-limit / blocked / dll).
+#      Kalau runner GitHub-nya SENDIRI kena rate-limit, solusinya turunkan
+#      --workers di bawah, jangan naikkan.
+
+name: Backtest 1D/2D (sekali jalan)
+
+on:
+  workflow_dispatch:
+    inputs:
+      workers:
+        description: 'Jumlah worker paralel (turunkan kalau kena rate-limit)'
+        default: '3'
+      years:
+        description: 'Berapa tahun ke belakang'
+        default: '3'
+
+jobs:
+  backtest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 330   # 5.5 jam — batas GitHub-hosted runner adalah 6 jam
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with: { python-version: '3.11' }
+
+      - name: Diagnosa akses Yahoo dari runner ini
+        run: python scripts/diagnose-yahoo.py || true
+        # `|| true`: diagnosa cuma informasi di log, bukan syarat lolos/gagal job
+
+      - run: pip install yfinance pandas numpy tqdm
+
+      - name: Jalankan backtest penuh
+        run: |
+          python backtest_bei.py \
+            --years ${{ github.event.inputs.years }} \
+            --workers ${{ github.event.inputs.workers }}
+
+      - name: Generate JSON dari hasil backtest
+        run: python scripts/generate-backtest-json.py backtest_trades_v2.csv
+
+      - name: Simpan CSV mentah sebagai artifact (bukan commit — terlalu besar)
+        uses: actions/upload-artifact@v4
+        with:
+          name: backtest-csv-raw
+          path: |
+            backtest_trades_v2.csv
+            backtest_summary_v2.csv
+          retention-days: 30
+
+      - name: Commit data/backtest/*.json yang baru
+        run: |
+          git config user.name  "backtest-bot"
+          git config user.email "backtest-bot@users.noreply.github.com"
+          git add data/backtest
+          git diff --staged --quiet || git commit -m "chore: backtest 1D/2D $(date +%F)"
+          git push
