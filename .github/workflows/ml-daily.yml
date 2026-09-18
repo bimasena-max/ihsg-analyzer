@@ -19,15 +19,17 @@ jobs:
 
       - run: pip install -r ml/requirements.txt
 
-      # Latih ulang tiap Senin saja — model tidak berubah berarti harian.
-      - name: Latih ulang (Senin)
+      # Latih ulang tiap Senin (jadwal otomatis), ATAU kapan saja kalau
+      # di-trigger manual (workflow_dispatch) — supaya training pertama kali
+      # bisa dipaksa jalan tanpa harus nunggu hari Senin berikutnya.
+      - name: Latih ulang (Senin, atau manual)
         if: github.event_name == 'workflow_dispatch' || fromJSON(format('{0}', github.run_number)) >= 0
         run: |
-          if [ "$(date +%u)" = "1" ]; then
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$(date +%u)" = "1" ]; then
             python ml/train.py --horizon 1 --years 3
             python ml/train.py --horizon 2 --years 3
           else
-            echo "Bukan Senin, lewati training."
+            echo "Bukan Senin dan bukan trigger manual, lewati training."
           fi
 
       - name: Prediksi
