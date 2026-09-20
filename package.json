@@ -1,0 +1,18 @@
+{
+  "name": "ihsg-analyzer",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start"
+  },
+  "dependencies": {
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.8",
+    "next": "^14.2.34",
+    "onnxruntime-node": "^1.19.2",
+    "react": "^18",
+    "react-dom": "^18"
+  }
+}
