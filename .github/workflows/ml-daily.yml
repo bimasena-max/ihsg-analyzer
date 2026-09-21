@@ -7,6 +7,12 @@ on:
     - cron: '0 11 * * 1-5'   # 18:00 WIB, setelah bursa tutup
   workflow_dispatch:
 
+# Bot harus boleh menulis ke repo supaya langkah "Commit hasil" di bawah bisa
+# mem-push model & prediksi. Repo baru memakai token read-only secara default,
+# dan tanpa izin ini git push gagal (sebelumnya tidak ketahuan karena `|| true`).
+permissions:
+  contents: write
+
 jobs:
   predict:
     runs-on: ubuntu-latest
@@ -44,4 +50,4 @@ jobs:
           git config user.email "ml-bot@users.noreply.github.com"
           git add data/predictions ml/models || true
           git diff --staged --quiet || git commit -m "chore: prediksi $(date +%F)"
-          git push || true
+          git push || echo "::warning::git push gagal. Cek Settings > Actions > General > Workflow permissions (harus Read and write)."
