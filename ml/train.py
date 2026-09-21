@@ -20,6 +20,11 @@ Aturan main yang membuat hasilnya bisa dipercaya:
 
   4. Kalibrasi probabilitas dicek. Model yang bilang "70%" harus benar sekitar
      70% dari waktu, kalau tidak angkanya menyesatkan di UI.
+
+  5. Prediksi out-of-sample per ticker disimpan (ml/models/oos_<h>d.json) supaya
+     UI bisa menggambar "kapan AI bilang naik, dan apakah benar naik" dari data
+     yang TIDAK dilihat model saat dilatih — bukan replay in-sample yang
+     kelihatan bagus tapi tidak membuktikan apa-apa.
 """
 import argparse
 import json
@@ -53,10 +58,17 @@ def make_model():
     return LGBMClassifier(max_iter=400, learning_rate=0.03, min_samples_leaf=80)
 
 
-def walk_forward(X, y, dates, horizon, n_folds=6):
-    """Mengembalikan daftar hasil per fold + prediksi out-of-sample gabungan."""
+def walk_forward(X, y, dates, horizon, n_folds=6, tickers=None):
+    """Mengembalikan daftar hasil per fold + prediksi out-of-sample gabungan.
+
+    tickers (opsional, array sejajar dengan X): kalau diberikan, tiap baris
+    prediksi out-of-sample ikut membawa kolom `ticker` dan `date` — dipakai
+    simpan_riwayat_oos() untuk chart per saham di UI.
+    """
     order = np.argsort(dates)
     X, y, dates = X.iloc[order], y.iloc[order], dates[order]
+    if tickers is not None:
+        tickers = np.asarray(tickers)[order]
     n = len(X)
     fold_size = n // (n_folds + 1)
     hasil, oos = [], []
@@ -85,7 +97,11 @@ def walk_forward(X, y, dates, horizon, n_folds=6):
             "uji_dari": str(dates[fold_size * k])[:10],
             "uji_sampai": str(dates[test_end - 1])[:10],
         })
-        oos.append(pd.DataFrame({"p": p, "y": yte.values}))
+        frame = pd.DataFrame({"p": p, "y": yte.values})
+        if tickers is not None:
+            frame["ticker"] = tickers[fold_size * k:test_end]
+            frame["date"] = dates[fold_size * k:test_end]
+        oos.append(frame)
 
     return hasil, (pd.concat(oos) if oos else pd.DataFrame())
 
@@ -104,6 +120,44 @@ def cek_kalibrasi(oos, bins=10):
          "n": int(r.n)}
         for r in g.itertuples() if r.n >= 30
     ]
+
+
+def simpan_riwayat_oos(oos, out_dir, horizon, max_hari=120):
+    """Simpan probabilitas out-of-sample per ticker, `max_hari` tanggal terakhir.
+
+    Format ringkas: satu daftar tanggal bersama + satu daftar angka per ticker
+    (per-mil 0-1000, None kalau ticker itu tidak punya baris di tanggal tsb).
+    Dibaca /api/ml-insight untuk menggambar chart di halaman detail saham.
+    """
+    if oos.empty or "ticker" not in oos.columns or "date" not in oos.columns:
+        return None
+    df = oos[["ticker", "date", "p"]].copy()
+    df["date"] = pd.to_datetime(df["date"]).dt.strftime("%Y-%m-%d")
+    hari = sorted(df["date"].unique())[-max_hari:]
+    posisi = {d: i for i, d in enumerate(hari)}
+    df = df[df["date"].isin(posisi)]
+
+    per_ticker = {}
+    for t, g in df.groupby("ticker"):
+        arr = [None] * len(hari)
+        for d, pr in zip(g["date"], g["p"]):
+            arr[posisi[d]] = int(round(float(pr) * 1000))
+        per_ticker[str(t)] = arr
+
+    payload = {
+        "horizon": f"{horizon}d",
+        "dibuat": datetime.now().isoformat(timespec="seconds"),
+        "satuan": "per-mil (0-1000) = probabilitas naik x 1000",
+        "catatan": "Prediksi walk-forward: tiap tanggal diprediksi oleh model yang "
+                   "hanya dilatih dengan data SEBELUM periode ujinya. Bukan hasil "
+                   "replay model final.",
+        "dates": hari,
+        "p": per_ticker,
+    }
+    path = f"{out_dir}/oos_{horizon}d.json"
+    with open(path, "w") as fh:
+        json.dump(payload, fh, separators=(",", ":"))
+    return path
 
 
 def main():
@@ -146,7 +200,8 @@ def main():
     print(f"{len(data):,} baris dari {data['ticker'].nunique()} ticker")
 
     X, y = data[F.FEATURE_COLS], data["y"]
-    folds, oos = walk_forward(X, y, data["date"].values, args.horizon)
+    folds, oos = walk_forward(X, y, data["date"].values, args.horizon,
+                              tickers=data["ticker"].values)
 
     if not folds:
         raise SystemExit("Data tidak cukup untuk walk-forward.")
@@ -216,6 +271,16 @@ def main():
     with open(f"{args.out}/model_{args.horizon}d.json", "w") as fh:
         json.dump(kartu, fh, indent=2)
     print(f"Tersimpan di {args.out}/model_{args.horizon}d.*")
+
+    # Riwayat out-of-sample untuk chart UI. Sama seperti export ONNX: kegagalan
+    # di sini TIDAK boleh menggagalkan training — model & kartu sudah tersimpan.
+    try:
+        path = simpan_riwayat_oos(oos, args.out, args.horizon)
+        if path:
+            print(f"Riwayat out-of-sample tersimpan di {path}")
+    except Exception as e:
+        print(f"PERINGATAN: gagal menyimpan riwayat out-of-sample ({e}). "
+              "Model dan kartu model tidak terpengaruh.")
 
 
 if __name__ == "__main__":

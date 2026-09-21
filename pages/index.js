@@ -11,6 +11,7 @@ import {
   findNearestResistance, calcFibTargets, calcATRStopLoss, snapshot,
 } from '../lib/core/indicators';
 import { buildVerdict } from '../lib/core/verdict';
+import AiInsightPanel from '../components/ml/AiInsightPanel';
 import {
   estimateHoldingDays, generateSwingSignals, generateScalpingSignals, calcSignals,
   detectAccumulation, calculateLiquidityScore, calcSMC,
@@ -1815,6 +1816,10 @@ export default function App() {
         closes, opens, highs, lows, vols, ts, price, ath, atl, dd, rsiV, inf, sc, bench,
         chg, hi52, lo52, pos52, ticker: t, smc, signals, todayGap,
         swingSignals, scalpSignals, accumSignals, intradayPattern, preARA, liquidityScore,
+        // Angka AI "sekarang" (0-100) dari baris screener; null kalau detail dibuka tanpa lewat leaderboard.
+        mlLive: effectiveScreenerRow
+          ? { p1d: effectiveScreenerRow.MLScore1d ?? null, p2d: effectiveScreenerRow.MLScore2d ?? null, note: effectiveScreenerRow.MLNote ?? null }
+          : null,
       });
     } catch (e) { setDetailData({ error: e.message }); }
     setDetailLoading(false);
@@ -3335,6 +3340,25 @@ Format padat seperti briefing fund manager. Max 220 kata.`;
                 ...(scalpSignals || []).filter(s => s.type !== 'SCALP_NEUTRAL'),
               ];
 
+              // Bahan panel "Teknikal vs Prediksi AI": jenis sinyal + winrate + rata-rata hasil (dari backtest)
+              const techRows = [
+                ...(swingSignals || []).map((s) => ({ s, kind: 'Swing' })),
+                ...(scalpSignals || []).filter(s => s.type !== 'SCALP_NEUTRAL').map((s) => ({ s, kind: 'Scalp' })),
+                ...(accumSignals || []).map((s) => ({ s, kind: 'Akumulasi' })),
+              ].map(({ s, kind }) => {
+                const bst = getBacktestStats(s.reason, detailData.ticker, s.signalName);
+                return {
+                  kind,
+                  dir: kind === 'Akumulasi' || String(s.type || '').includes('BUY') ? 'BUY' : 'SELL',
+                  name: s.reason,
+                  wr: bst ? bst.winRate : null,
+                  avgRet: bst ? bst.avgRet : null,
+                  n: bst ? bst.count : null,
+                  horizon: bst ? bst.bestHorizon : null,
+                  specific: !!(bst && bst._tickerSpecific),
+                };
+              });
+
               return (
                 <>
                   {/* Banner */}
@@ -3673,6 +3697,9 @@ Format padat seperti briefing fund manager. Max 220 kata.`;
                           <RSIChart closes={closes} />
                         </div>
                       </div>
+
+                      <div className="sec-hdr"><div className="sec-hdr-title">🤖 Teknikal vs Prediksi AI</div></div>
+                      <AiInsightPanel ticker={detailData.ticker} techRows={techRows} mlLive={detailData.mlLive} closes={closes} ts={ts} />
 
                       <div className="range-bar-wrap">
                         <div className="range-bar-labels">
