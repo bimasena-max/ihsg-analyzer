@@ -16,6 +16,11 @@ const nextConfig = {
       // dan file tracing Next TIDAK ikut membawanya ke function Vercel (sudah diuji).
       // Tanpa baris ini modelnya tidak ada di server -> "Model ML belum tersedia".
       '/api/screener': ['./ml/models/*.onnx'],
+      // Sama persis untuk tombol Prediksi (semua horizon): ml-predict.js membaca
+      // tree_<h>d.json dengan path yang disusun saat runtime. Tanpa baris ini,
+      // setiap horizon akan gagal dengan "Model horizon ini belum ada di server"
+      // walau file-nya ada di repo (sudah diuji dengan build sungguhan).
+      '/api/ml-predict': ['./ml/models/tree_*.json'],
     },
   },
   webpack: (config, { isServer }) => {

@@ -32,11 +32,33 @@ jobs:
         if: github.event_name == 'workflow_dispatch' || fromJSON(format('{0}', github.run_number)) >= 0
         run: |
           if [ "${{ github.event_name }}" = "workflow_dispatch" ] || [ "$(date +%u)" = "1" ]; then
-            python ml/train.py --horizon 1 --years 3
-            python ml/train.py --horizon 2 --years 3
+            # Satu kali panggilan untuk semua horizon (1,2,3,5,7,14,30,60 hari bursa):
+            # data Yahoo diunduh SEKALI lalu dipakai ulang untuk tiap horizon, bukan
+            # diunduh 8x. Horizon yang gagal dilatih tidak menghentikan horizon lain
+            # (lihat ml/train.py: setiap horizon dibungkus try/except sendiri).
+            python ml/train.py --years 3
           else
             echo "Bukan Senin dan bukan trigger manual, lewati training."
           fi
+
+      - name: Cek berkas model
+        # tree_<h>d.json: dipakai /api/ml-predict (tombol Prediksi di panel, SEMUA
+        # horizon). model_<h>d.onnx: dipakai pages/api/screener.js (kolom ML di
+        # leaderboard, cuma horizon cepat). Kegagalan export sengaja tidak
+        # menggagalkan training, jadi dicek di sini dan dimunculkan sebagai
+        # peringatan yang kelihatan di halaman run (bagian Annotations).
+        run: |
+          ls -la ml/models 2>/dev/null || echo "ml/models belum ada"
+          for h in 1d 2d 3d 5d 7d 14d 30d 60d; do
+            if [ ! -f "ml/models/tree_${h}.json" ]; then
+              echo "::warning::tree_${h}.json tidak terbentuk. Tombol Prediksi ${h} tidak akan jalan. Cari 'PERINGATAN: gagal export pohon JSON' di log Latih ulang."
+            fi
+          done
+          for h in 1d 2d; do
+            if [ ! -f "ml/models/model_${h}.onnx" ]; then
+              echo "::warning::model_${h}.onnx tidak terbentuk. Kolom ML leaderboard tidak akan jalan. Cari 'PERINGATAN: gagal export ONNX' di log Latih ulang."
+            fi
+          done
 
       - name: Prediksi
         continue-on-error: true    # model belum lolos baseline = keluar non-zero, itu wajar

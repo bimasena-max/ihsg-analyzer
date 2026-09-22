@@ -2,26 +2,30 @@
 // Panel "Teknikal vs Prediksi AI" untuk halaman detail saham.
 //
 //   kiri  : sinyal teknikal (jenis, winrate, rata-rata hasil) + baris AI dengan format SAMA
-//   kanan : gambar hasil prediksi AI (harga + tebakan AI + hasilnya) untuk 1 / 2 hari ke depan
-//   bawah : seberapa bisa dipercaya (uji model, kalibrasi, rekam jejak di saham ini) + cara baca
+//   kanan : pilih horizon (1, 2, 3, 5, 7, 14, 30, 60 hari bursa), tekan Prediksi, lihat
+//           gambar hasil prediksi AI untuk horizon itu
+//   bawah : seberapa bisa dipercaya (uji model, kalibrasi, rekam jejak) + cara baca
 //
 // Data:
-//   /api/ml-insight?ticker=  kartu model, uji mundur (out-of-sample), riwayat prediksi harian
-//   props.mlLive             angka AI "sekarang" dari baris screener (0-100), kalau dibuka dari leaderboard
-//   props.closes / props.ts  harga dari halaman detail; kalau kurang dari 70 bar, panel ambil 6 bulan sendiri
+//   /api/ml-insight?ticker=        kartu model, uji mundur (out-of-sample), riwayat prediksi,
+//                                  untuk SEMUA horizon (dimuat sekali)
+//   /api/ml-predict?ticker=&horizon=  probabilitas naik SEKARANG, dihitung hanya saat tombol
+//                                  Prediksi ditekan, per horizon
+//   props.closes / props.ts        harga dari halaman detail; kalau kurang dari 200 bar,
+//                                  panel ambil harga 1 tahun sendiri
 //
 // Semua angka dihitung di ai-insight-logic.js (diuji terpisah). File ini hanya menggambar.
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
-  ML_BULLISH, ML_BEARISH, HORIZON_BARS, HORIZON_LABEL,
+  ML_BULLISH, ML_BEARISH, HORIZON_LIST, HORIZON_BARS, HORIZON_LABEL, windowBars,
   tanggalID, pct, signed, horizonHari, callFor, verdictFor, bacaAngka,
   isoFromEpoch, pricesFromChartJson, alignSeries, buildPoints, trackRecord,
   calibrationLookup, reliability, alignment, pickTechRows,
+  defaultHorizon, ringkasFitur, ringkasLolos,
 } from './ai-insight-logic';
 
-const WINDOW = 90;          // jumlah bar harga yang digambar
-const MIN_BAR_PROPS = 70;   // di bawah ini panel ambil harga 6 bulan sendiri
+const MIN_BAR_PROPS = 200;  // di bawah ini panel ambil harga 1 tahun sendiri (horizon panjang butuh riwayat)
 
 const rp = (v) => `Rp ${Math.round(v).toLocaleString('id-ID')}`;
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
@@ -32,7 +36,7 @@ const TONE_BG = { green: 'var(--green-dim)', red: 'var(--red-dim)', amber: 'var(
 // ─────────────────────────────────────────────────────────────────────────────
 // Gambar hasil prediksi AI
 // ─────────────────────────────────────────────────────────────────────────────
-export function AiChart({ width, height = 320, dates, closes, points, from, hz, pNow, pBoth, hover, onHover, muted }) {
+export function AiChart({ width, height = 320, dates, closes, points, from, hz, pNow, nowIdx, hover, onHover, muted }) {
   const last = closes.length - 1;
   const n = last - from + 1;
   if (!(width > 120) || n < 2) return null;
@@ -125,7 +129,9 @@ export function AiChart({ width, height = 320, dates, closes, points, from, hz, 
 
   const yLast = YP(closes[last]);
   const yPill1 = Math.min(Math.max(yLast - 15, yTop0 + 34), yTop0 + hTop - 40);
-  const yPill2 = yPill1 + 28;
+  // Prediksi dihitung dari penutupan terakhir yang final: kalau bar hari ini belum selesai,
+  // cincin diletakkan di bar sebelumnya (nowIdx), bukan di ujung.
+  const xNow = X(isNum(nowIdx) && nowIdx >= from && nowIdx <= last ? nowIdx : last);
 
   const aria = `Grafik harga ${n} hari terakhir dengan tebakan arah AI. Hijau berarti tebakan benar, merah berarti meleset.`;
 
@@ -144,8 +150,7 @@ export function AiChart({ width, height = 320, dates, closes, points, from, hz, 
           <rect x={xFut - 6} y={yTop0} width={futW} height={hTop} rx={8} fill="var(--blue-dim)" opacity="0.55" />
           <text x={xFut + (futW - 8) / 2} y={yTop0 + 15} textAnchor="middle" fontSize="10" fill="var(--muted)"
             fontFamily="'DM Sans',sans-serif">prediksi AI</text>
-          {pill(yPill1, '1d', pBoth?.['1d'] ?? null)}
-          {pill(yPill2, '2d', pBoth?.['2d'] ?? null)}
+          {pill(yPill1, hz, pNow ?? null)}
         </g>
       )}
 
@@ -191,8 +196,8 @@ export function AiChart({ width, height = 320, dates, closes, points, from, hz, 
       ))}
       {isNum(pNow) && (
         <g>
-          <circle cx={X(last)} cy={YQ(pNow)} r={5} fill="none" stroke="var(--text)" strokeWidth="1.6" />
-          <text x={X(last) - 9} y={YQ(pNow) - 8} textAnchor="end" fontSize="10.5" fontWeight="700" fill="var(--text)"
+          <circle cx={xNow} cy={YQ(pNow)} r={5} fill="none" stroke="var(--text)" strokeWidth="1.6" />
+          <text x={xNow - 9} y={YQ(pNow) - 8} textAnchor="end" fontSize="10.5" fontWeight="700" fill="var(--text)"
             fontFamily="'DM Mono',monospace">sekarang {Math.round(pNow * 100)}%</text>
         </g>
       )}
@@ -270,16 +275,16 @@ function Row({ badge, badgeColor, arrow, arrowColor, title, wr, avg, meta, note 
 }
 
 // Teks hover di bawah chart
-function hoverText(i, dates, closes, points, h) {
+function hoverText(i, dates, closes, points, hz) {
   const t = tanggalID(dates[i]);
   const pt = points[i];
   if (!pt) return `${t} · ${rp(closes[i])} · tidak ada tebakan AI di tanggal ini`;
   const sumber = pt.src === 'harian' ? 'prediksi harian' : 'uji mundur';
   const arah = pt.lean === 'naik' ? 'menebak naik' : pt.lean === 'turun' ? 'menebak turun' : 'netral';
   let hasil;
-  if (pt.outcome === 'pending') hasil = `hasil ${HORIZON_LABEL[h === 2 ? '2d' : '1d']} ke depan belum ketahuan`;
+  if (pt.outcome === 'pending') hasil = `hasil ${HORIZON_LABEL[hz]} ke depan belum ketahuan`;
   else if (pt.outcome === 'none') hasil = 'tepat 50%, tidak dinilai';
-  else hasil = `${HORIZON_LABEL[h === 2 ? '2d' : '1d']} kemudian ${pt.ret >= 0 ? 'naik' : 'turun'} ${signed(pt.ret * 100, 2)}% → tebakan ${pt.outcome === 'hit' ? 'benar' : 'meleset'}`;
+  else hasil = `${HORIZON_LABEL[hz]} kemudian ${pt.ret >= 0 ? 'naik' : 'turun'} ${signed(pt.ret * 100, 2)}% → tebakan ${pt.outcome === 'hit' ? 'benar' : 'meleset'}`;
   return `${t} · ${rp(closes[i])} · AI ${Math.round(pt.p * 100)}% (${sumber}) ${arah} · ${hasil}`;
 }
 
@@ -289,37 +294,36 @@ function hoverText(i, dates, closes, points, h) {
 export function AiInsightView({
   ticker, techRows, hz, setHz, chartWidth, chartRef,
   status, error, onRetry,
-  harga, hargaStatus, insight, live, liveStatus, liveNote, onHitung, canHitung,
+  harga, hargaStatus, insight, preds, onPredict,
   hover, setHover,
 }) {
   const h = HORIZON_BARS[hz];
+  const win = windowBars(h);
   const hzData = insight?.horizons?.[hz] || null;
   const kartu = hzData?.kartu || null;
   const rel = useMemo(() => reliability(kartu), [kartu]);
   const muted = rel.status === 'gagal';
+  const lolosRingkas = useMemo(() => ringkasLolos(insight?.horizons), [insight]);
 
-  const lastDate = harga?.dates?.[harga.dates.length - 1] || null;
-  const nowFrom = (key) => {
-    const l = live?.[key];
-    if (isNum(l)) return l;
-    const t = insight?.horizons?.[key]?.terbaru;
-    return t && lastDate && t.d === lastDate ? t.p : null;
-  };
-  const pBoth = { '1d': nowFrom('1d'), '2d': nowFrom('2d') };
-  const pNow = pBoth[hz];
+  // Hasil tombol Prediksi untuk horizon yang sedang dipilih
+  const pred = preds?.[hz] || null;
+  const pNow = pred && pred.status === 'ok' && isNum(pred.p) ? pred.p : null;
+  const asOf = pred && pred.status === 'ok' ? pred.asOf : null;
 
-  // deret + titik + rekam jejak
-  const { points, from, record, avgNaik } = useMemo(() => {
-    if (!harga) return { points: [], from: 0, record: null, avgNaik: null };
+  // deret + titik + rekam jejak untuk horizon terpilih
+  const { points, from, record, avgNaik, nowIdx } = useMemo(() => {
+    if (!harga) return { points: [], from: 0, record: null, avgNaik: null, nowIdx: -1 };
     const ai = alignSeries(harga.dates, hzData?.uji_mundur || null, hzData?.harian || []);
     const pts = buildPoints(harga.closes, ai, h);
-    const start = Math.max(0, harga.closes.length - WINDOW);
+    const start = Math.max(0, harga.closes.length - win);
     const vis = pts.slice(start);
     const rec = trackRecord(vis, harga.closes, h);
     const naik = vis.filter((p) => p && p.lean === 'naik' && (p.outcome === 'hit' || p.outcome === 'miss') && isNum(p.ret));
     const avg = naik.length ? (naik.reduce((s, p) => s + p.ret, 0) / naik.length) * 100 : null;
-    return { points: pts, from: start, record: rec, avgNaik: avg };
-  }, [harga, hzData, h]);
+    let idx = harga.dates.length - 1;
+    if (asOf) { const j = harga.dates.lastIndexOf(asOf); if (j >= 0) idx = j; }
+    return { points: pts, from: start, record: rec, avgNaik: avg, nowIdx: idx };
+  }, [harga, hzData, h, win, asOf]);
 
   const verdict = verdictFor(pNow);
   const teknik = useMemo(() => pickTechRows(techRows, 4), [techRows]);
@@ -328,6 +332,7 @@ export function AiInsightView({
 
   const aiWR = record && record.naikN >= 5 ? Math.round((record.naikHits / record.naikN) * 1000) / 10 : null;
   const aiAvg = record && record.naikN >= 5 ? avgNaik : null;
+  const fiturTeks = pred && pred.fitur ? ringkasFitur(pred.fitur) : '';
 
   return (
     <div className="aip-wrap">
@@ -365,7 +370,7 @@ export function AiInsightView({
             title={`Saat AI menebak naik (di atas 50%)`}
             wr={aiWR} avg={aiAvg}
             meta={record && record.naikN >= 5
-              ? `${record.naikN} hari dari ${WINDOW} hari terakhir · ${HORIZON_LABEL[hz]} ke depan`
+              ? `${record.naikN} hari dari ${win} hari terakhir · ${HORIZON_LABEL[hz]} ke depan`
               : record && record.n > 0 ? 'terlalu sedikit tebakan naik untuk dihitung' : 'belum ada rekam jejak'}
             note={muted
               ? 'Model belum lolos uji, anggap ini referensi saja.'
@@ -377,32 +382,49 @@ export function AiInsightView({
           </div>
         </div>
 
-        {/* ── kanan: gambar ──────────────────────────────────────────── */}
+        {/* ── kanan: pilih horizon, tekan Prediksi, lihat gambar ─────── */}
         <div className="aip-card">
-          <div className="aip-head">
-            <div>
-              <div className="aip-h">Prediksi AI</div>
-              <div className="aip-verdict" style={{ color: verdict.color }}>
-                {verdict.label}{pNow != null && <span className="aip-big"> {pct(pNow, 0)}%</span>}
-              </div>
-            </div>
-            <div className="aip-seg" role="group" aria-label="Horizon prediksi">
-              {['1d', '2d'].map((k) => (
-                <button key={k} className={`chart-opt-btn ${hz === k ? 'on' : ''}`} onClick={() => setHz(k)}>
-                  {HORIZON_LABEL[k]}{pBoth[k] != null ? ` · ${Math.round(pBoth[k] * 100)}%` : ''}
-                </button>
-              ))}
-            </div>
+          <div className="aip-h">Prediksi AI</div>
+          <div className="aip-verdict" style={{ color: pNow != null ? verdict.color : 'var(--muted)' }}>
+            {pNow != null
+              ? <>{verdict.label}<span className="aip-big"> {pct(pNow, 0)}%</span></>
+              : 'Belum diprediksi'}
           </div>
 
-          {pNow != null && <div className="aip-read">{bacaAngka(pNow, hz)}</div>}
-          {pNow == null && (
+          <div className="aip-hz" role="group" aria-label="Pilih horizon prediksi">
+            <span className="aip-hz-l">Horizon (hari bursa)</span>
+            {HORIZON_LIST.map((k) => {
+              const pk = preds?.[k];
+              const ada = pk && pk.status === 'ok' && isNum(pk.p);
+              return (
+                <button key={k} className={`chart-opt-btn ${hz === k ? 'on' : ''}`} onClick={() => setHz(k)}
+                  title={ada ? `Prediksi ${HORIZON_LABEL[k]}: ${Math.round(pk.p * 100)}% naik` : `Pilih ${HORIZON_LABEL[k]}`}>
+                  {HORIZON_BARS[k]}{ada ? ` · ${Math.round(pk.p * 100)}%` : ''}
+                </button>
+              );
+            })}
+          </div>
+
+          <div className="aip-actions">
+            <button className="aip-btn" onClick={onPredict} disabled={pred?.status === 'loading'}>
+              {pred?.status === 'loading' ? 'Menghitung…'
+                : pNow != null ? `Hitung ulang ${HORIZON_LABEL[hz]}` : `Prediksi ${HORIZON_LABEL[hz]}`}
+            </button>
+            {pNow == null && pred?.status !== 'loading' && pred?.status !== 'error' && (
+              <span className="aip-hint">Peluang harga naik {HORIZON_LABEL[hz]} ke depan dihitung saat tombol ditekan.</span>
+            )}
+          </div>
+
+          {pred?.status === 'error' && <div className="aip-warn">{pred.error}</div>}
+
+          {pNow != null && (
             <div className="aip-read">
-              {liveStatus === 'loading' ? 'Menghitung prediksi AI…'
-                : liveNote || 'Belum ada angka AI hari ini untuk saham ini.'}
-              {canHitung && liveStatus !== 'loading' && (
-                <> <button className="chart-opt-btn" onClick={onHitung}>Hitung sekarang</button></>
-              )}
+              {bacaAngka(pNow, hz)}
+              <div className="aip-mute" style={{ marginTop: 4 }}>
+                Dihitung dari penutupan {tanggalID(asOf)}
+                {pred.barBerjalanDibuang ? ' (bar hari ini belum selesai, jadi tidak dipakai)' : ''}.
+                {fiturTeks && <> Yang dilihat model: {fiturTeks}</>}
+              </div>
             </div>
           )}
 
@@ -416,7 +438,7 @@ export function AiInsightView({
           <div ref={chartRef} className="aip-chart">
             {harga && chartWidth > 0 && (
               <AiChart width={chartWidth} dates={harga.dates} closes={harga.closes} points={points} from={from}
-                hz={hz} pNow={pNow} pBoth={pBoth} hover={hover} onHover={setHover} muted={muted} />
+                hz={hz} pNow={pNow} nowIdx={nowIdx} hover={hover} onHover={setHover} muted={muted} />
             )}
             {!harga && (
               <div className="aip-empty" style={{ padding: '3rem 0' }}>
@@ -427,7 +449,7 @@ export function AiInsightView({
 
           <div className="aip-hover" aria-live="polite">
             {harga && hover != null
-              ? hoverText(hover, harga.dates, harga.closes, points, h)
+              ? hoverText(hover, harga.dates, harga.closes, points, hz)
               : (
                 <span>
                   Baris “tebakan” = arah tebakan AI tiap hari (▲ naik, ▼ turun):{' '}
@@ -442,8 +464,8 @@ export function AiInsightView({
 
           {harga && record && record.n === 0 && (
             <div className="aip-note" style={{ marginTop: 6 }}>
-              Riwayat tebakan AI untuk saham ini belum ada, jadi belum ada segitiga di grafik. Terisi otomatis
-              setelah model dilatih ulang (tiap Senin, atau saat workflow dijalankan manual) dan tiap hari bursa.
+              Riwayat tebakan AI untuk horizon {HORIZON_LABEL[hz]} belum ada, jadi belum ada segitiga di grafik. Terisi otomatis
+              setelah model dilatih ulang (tiap Senin, atau saat workflow dijalankan manual).
             </div>
           )}
         </div>
@@ -452,7 +474,7 @@ export function AiInsightView({
       {/* ── bawah: seberapa bisa dipercaya ────────────────────────────── */}
       <div className="aip-card aip-trust">
         <div className="aip-trust-head">
-          <div className="aip-h" style={{ marginBottom: 0 }}>Seberapa bisa dipercaya?</div>
+          <div className="aip-h" style={{ marginBottom: 0 }}>Seberapa bisa dipercaya? ({HORIZON_LABEL[hz]})</div>
           <span className="aip-chip" style={{
             color: rel.status === 'lolos' ? 'var(--green)' : rel.status === 'gagal' ? 'var(--red)' : 'var(--amber)',
             borderColor: rel.status === 'lolos' ? 'var(--green)' : rel.status === 'gagal' ? 'var(--red)' : 'var(--amber)',
@@ -490,7 +512,7 @@ export function AiInsightView({
               </div>
             ) : (
               <div className="aip-p aip-mute">
-                {pNow == null ? 'Perlu angka AI hari ini untuk membandingkan.' : 'Belum ada data uji di kisaran angka ini.'}
+                {pNow == null ? 'Tekan Prediksi dulu untuk membandingkan.' : 'Belum ada data uji di kisaran angka ini.'}
               </div>
             )}
           </div>
@@ -517,15 +539,31 @@ export function AiInsightView({
           </div>
         </div>
 
+        {h >= 14 && (
+          <div className="aip-note-soft">
+            Horizon panjang: harga {h} hari ke depan dipakai berulang oleh hari-hari yang berdekatan, jadi hasil uji
+            tumpang tindih dan angka akurasinya kurang pasti dibanding horizon pendek.
+          </div>
+        )}
+        {lolosRingkas.total > 1 && (
+          <div className="aip-note-soft">
+            Lolos uji: {lolosRingkas.lolos} dari {lolosRingkas.total} horizon
+            {lolosRingkas.lolos ? ` (${lolosRingkas.daftar.map((k) => HORIZON_BARS[k]).join(', ')} hari)` : ''}.
+            Karena beberapa horizon diuji sekaligus, satu horizon yang lolos sendirian bisa jadi kebetulan;
+            lebih meyakinkan kalau horizon yang berdekatan ikut lolos.
+          </div>
+        )}
+
         <details className="aip-how" open>
           <summary>Cara membaca gambar ini</summary>
           <ul>
             <li><b>Garis atas</b> adalah harga. Baris segitiga tepat di bawahnya = tebakan arah AI pada hari itu
-              (▲ naik, ▼ turun). Hijau berarti tebakannya benar, merah berarti meleset, abu berarti hasilnya belum ketahuan.
-              Segitiga besar = AI yakin (60% ke atas atau 35% ke bawah).</li>
+              (▲ naik, ▼ turun) untuk horizon yang kamu pilih. Hijau berarti tebakannya benar, merah berarti meleset,
+              abu berarti hasilnya belum ketahuan. Segitiga besar = AI yakin (60% ke atas atau 35% ke bawah).</li>
             <li><b>Garis bawah</b> adalah peluang naik menurut AI. Di atas 50% berarti AI menebak naik; 60% ke atas dianggap condong naik,
               35% ke bawah condong turun. Di antaranya AI belum yakin.</li>
-            <li><b>Kotak di kanan</b> adalah tebakan AI untuk 1 dan 2 hari ke depan. Itu peluang, bukan target harga.</li>
+            <li><b>Kotak di kanan</b> adalah hasil tombol Prediksi untuk horizon terpilih: peluang harga {HORIZON_LABEL[hz]} lagi
+              lebih tinggi dari penutupan terakhir. Itu peluang, bukan target harga.</li>
             <li><b>Garis biru</b> = uji mundur: AI menebak ulang hari-hari lalu memakai data yang tidak dilihatnya saat belajar.
               <b> Garis ungu</b> = prediksi harian yang dicatat sebelum hasilnya ada, jadi yang paling jujur.</li>
           </ul>
@@ -549,19 +587,28 @@ export function AiInsightView({
 // ─────────────────────────────────────────────────────────────────────────────
 const TTL = 10 * 60 * 1000;
 const insightCache = new Map();   // ticker -> { at, data }
-const liveCache = new Map();      // ticker -> { at, p1d, p2d }
+const predCache = new Map();      // `${ticker}|${horizon}` -> { at, data }
 
-export default function AiInsightPanel({ ticker, techRows, mlLive, closes, ts }) {
-  const [hz, setHz] = useState('1d');
+export default function AiInsightPanel({ ticker, techRows, closes, ts }) {
+  const [hz, setHz] = useState(() => defaultHorizon(techRows));
   const [hover, setHover] = useState(null);
   const [state, setState] = useState({ status: 'loading', data: null, error: null });
   const [retry, setRetry] = useState(0);
   const [hargaFetch, setHargaFetch] = useState({ status: 'idle', data: null });
-  const [liveState, setLiveState] = useState({ status: 'idle', p1d: null, p2d: null, note: null });
+  const [preds, setPreds] = useState(() => {
+    const o = {};
+    for (const k of HORIZON_LIST) {
+      const c = predCache.get(`${ticker}|${k}`);
+      if (c && Date.now() - c.at < TTL) o[k] = c.data;
+    }
+    return o;
+  });
   const [chartWidth, setChartWidth] = useState(0);
   const chartRef = useRef(null);
+  const alive = useRef(true);
+  useEffect(() => { alive.current = true; return () => { alive.current = false; }; }, []);
 
-  // 1. kartu model + riwayat prediksi
+  // 1. kartu model + riwayat uji mundur untuk semua horizon
   useEffect(() => {
     if (!ticker) return undefined;
     const hit = insightCache.get(ticker);
@@ -579,7 +626,7 @@ export default function AiInsightPanel({ ticker, techRows, mlLive, closes, ts })
     return () => ctl.abort();
   }, [ticker, retry]);
 
-  // 2. harga: pakai dari halaman detail kalau cukup panjang, kalau tidak ambil 6 bulan
+  // 2. harga: pakai dari halaman detail kalau cukup panjang, kalau tidak ambil 1 tahun
   const hargaProps = useMemo(() => {
     if (!Array.isArray(closes) || !Array.isArray(ts) || closes.length < MIN_BAR_PROPS || ts.length !== closes.length) return null;
     return { dates: ts.map(isoFromEpoch), closes };
@@ -589,7 +636,7 @@ export default function AiInsightPanel({ ticker, techRows, mlLive, closes, ts })
     if (hargaProps || !ticker) return undefined;
     const ctl = new AbortController();
     setHargaFetch({ status: 'loading', data: null });
-    fetch(`/api/chart?ticker=${encodeURIComponent(ticker)}&range=6mo`, { signal: ctl.signal })
+    fetch(`/api/chart?ticker=${encodeURIComponent(ticker)}&range=1y`, { signal: ctl.signal })
       .then((r) => r.json())
       .then((j) => {
         const p = pricesFromChartJson(j);
@@ -601,39 +648,22 @@ export default function AiInsightPanel({ ticker, techRows, mlLive, closes, ts })
   const harga = hargaProps || hargaFetch.data;
   const hargaStatus = hargaProps ? 'ok' : hargaFetch.status;
 
-  // 3. angka AI "sekarang": dari baris screener kalau ada, kalau tidak dari cache / tombol
-  const live = useMemo(() => {
-    if (mlLive && (isNum(mlLive.p1d) || isNum(mlLive.p2d))) {
-      return { '1d': isNum(mlLive.p1d) ? mlLive.p1d / 100 : null, '2d': isNum(mlLive.p2d) ? mlLive.p2d / 100 : null };
-    }
-    const c = liveCache.get(ticker);
-    if (c && Date.now() - c.at < TTL) return { '1d': c.p1d, '2d': c.p2d };
-    if (isNum(liveState.p1d) || isNum(liveState.p2d)) return { '1d': liveState.p1d, '2d': liveState.p2d };
-    return null;
-  }, [mlLive, ticker, liveState]);
-
-  const onHitung = useCallback(async () => {
-    setLiveState({ status: 'loading', p1d: null, p2d: null, note: null });
+  // 3. tombol Prediksi: hitung peluang naik SEKARANG untuk horizon yang sedang dipilih
+  const onPredict = useCallback(async () => {
+    const k = hz;
+    setPreds((p) => ({ ...p, [k]: { status: 'loading' } }));
+    let hasil;
     try {
-      const r = await fetch('/api/screener', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tickers: [ticker] }),
-      });
-      const j = await r.json();
-      const row = j?.results?.[0];
-      if (!r.ok || !row) throw new Error('saham ini tidak lolos penyaringan atau datanya kurang');
-      const p1d = isNum(row.MLScore1d) ? row.MLScore1d / 100 : null;
-      const p2d = isNum(row.MLScore2d) ? row.MLScore2d / 100 : null;
-      if (p1d == null && p2d == null) {
-        setLiveState({ status: 'none', p1d: null, p2d: null, note: row.MLNote || 'Model ML belum tersedia di server.' });
-        return;
-      }
-      liveCache.set(ticker, { at: Date.now(), p1d, p2d });
-      setLiveState({ status: 'ok', p1d, p2d, note: null });
+      const r = await fetch(`/api/ml-predict?ticker=${encodeURIComponent(ticker)}&horizon=${k}`);
+      const j = await r.json().catch(() => null);
+      if (!r.ok || !j || !isNum(j.p)) throw new Error(j?.error || `HTTP ${r.status}`);
+      hasil = { status: 'ok', p: j.p, asOf: j.asOf, barBerjalanDibuang: !!j.barBerjalanDibuang, fitur: j.fitur || null };
+      predCache.set(`${ticker}|${k}`, { at: Date.now(), data: hasil });
     } catch (e) {
-      setLiveState({ status: 'error', p1d: null, p2d: null, note: `Belum bisa dihitung: ${e.message}.` });
+      hasil = { status: 'error', error: e.message };
     }
-  }, [ticker]);
+    if (alive.current) setPreds((p) => ({ ...p, [k]: hasil }));
+  }, [ticker, hz]);
 
   // 4. lebar chart mengikuti kontainer
   useEffect(() => {
@@ -656,9 +686,7 @@ export default function AiInsightPanel({ ticker, techRows, mlLive, closes, ts })
       chartWidth={chartWidth} chartRef={chartRef}
       status={state.status === 'error' ? 'error' : 'ok'} error={state.error} onRetry={() => setRetry((n) => n + 1)}
       harga={harga} hargaStatus={hargaStatus} insight={state.data}
-      live={live} liveStatus={liveState.status}
-      liveNote={mlLive && !live ? (mlLive.note || 'Model ML belum tersedia di server.') : liveState.note}
-      onHitung={onHitung} canHitung={!mlLive}
+      preds={preds} onPredict={onPredict}
       hover={hover} setHover={setHover}
     />
   );
@@ -709,5 +737,13 @@ const CSS = `
 .aip-how summary{cursor:pointer;font-weight:700;font-size:.75rem;margin-bottom:.4rem}
 .aip-how ul{padding-left:1.1rem;line-height:1.65}
 .aip-how li{margin-bottom:.25rem}
+.aip-hz{display:flex;flex-wrap:wrap;gap:4px;align-items:center;margin:.5rem 0 .6rem}
+.aip-hz-l{font-size:.68rem;color:var(--muted);margin-right:.3rem}
+.aip-actions{display:flex;flex-wrap:wrap;gap:.6rem;align-items:center;margin-bottom:.6rem}
+.aip-btn{background:var(--blue);color:#06101f;border:none;border-radius:8px;padding:.5rem 1rem;font-weight:700;font-size:.8rem;cursor:pointer;font-family:inherit}
+.aip-btn:hover{filter:brightness(1.1)}
+.aip-btn:disabled{opacity:.6;cursor:default}
+.aip-hint{font-size:.72rem;color:var(--muted)}
+.aip-note-soft{margin-top:.8rem;font-size:.72rem;color:var(--muted);line-height:1.55}
 .aip-foot{margin-top:.8rem;font-size:.66rem;color:var(--muted);line-height:1.5}
 `;

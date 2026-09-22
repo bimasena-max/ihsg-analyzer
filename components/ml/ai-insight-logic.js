@@ -3,6 +3,8 @@
 // Dipisah dari JSX supaya bisa diuji dengan node biasa dan gampang dicari kalau
 // angka di layar terlihat aneh.
 
+import { HORIZONS } from '../../lib/core/constants';
+
 // ── Ambang ───────────────────────────────────────────────────────────────────
 // SAMA dengan kolom ML di leaderboard (pages/index.js: mlBullish >= 60,
 // mlBearish <= 35, histBullish = winrate >= 50). Kalau mau diubah, ubah di sini
@@ -14,8 +16,14 @@ export const WR_BULLISH = 50;
 // Di bawah ini "rekam jejak" terlalu sedikit untuk dipercaya sebagai pola.
 export const MIN_SAMPEL = 20;
 
-export const HORIZON_BARS = { '1d': 1, '2d': 2 };
-export const HORIZON_LABEL = { '1d': '1 hari', '2d': '2 hari' };
+// Horizon yang sama dengan backtest teknikal (lib/core/constants.js): 1, 2, 3, 5, 7, 14, 30, 60 hari bursa.
+export const HORIZON_LIST = HORIZONS;
+export const HORIZON_BARS = Object.fromEntries(HORIZON_LIST.map((h) => [h, parseInt(h, 10)]));
+export const HORIZON_LABEL = Object.fromEntries(HORIZON_LIST.map((h) => [h, `${parseInt(h, 10)} hari`]));
+
+/** Jumlah bar harga yang digambar / dihitung rekam jejaknya. Horizon panjang butuh jendela lebih lebar
+ *  supaya masih ada cukup hari yang hasilnya sudah ketahuan (30 hari ke depan baru ketahuan 30 hari kemudian). */
+export const windowBars = (h) => Math.min(250, Math.max(90, 3 * h));
 
 const isNum = (v) => typeof v === 'number' && Number.isFinite(v);
 
@@ -78,7 +86,8 @@ export function verdictFor(p) {
 export function bacaAngka(p, h) {
   if (!isNum(p)) return '';
   const n = Math.round(p * 100);
-  const kapan = h === '2d' ? '2 hari lagi' : 'besok';
+  const hari = parseInt(h, 10);
+  const kapan = hari === 1 ? 'besok' : `${hari} hari bursa lagi`;
   return `Dari 100 kondisi pasar yang mirip hari ini, model memperkirakan sekitar ${n} berakhir lebih tinggi ${kapan}. `
     + 'Angka 50 berarti sama saja dengan tebak-tebakan.';
 }
@@ -257,8 +266,8 @@ export function alignment(techRows, p) {
   const ai = callFor(p);
 
   if (ai === 'none') {
-    return { code: 'tanpa-ai', tone: 'muted', title: 'Prediksi AI belum tersedia',
-      text: 'Belum ada angka AI untuk saham ini, jadi belum ada yang bisa dibandingkan dengan teknikal.' };
+    return { code: 'tanpa-ai', tone: 'muted', title: 'Belum ada prediksi AI',
+      text: 'Tekan tombol Prediksi di kartu kanan untuk membandingkannya dengan sinyal teknikal.' };
   }
   if (tech === 'kosong') {
     return { code: 'tanpa-teknikal', tone: 'muted', title: 'Tidak ada sinyal teknikal untuk dibandingkan',
@@ -289,4 +298,41 @@ export function pickTechRows(rows, max = 4) {
   const berdata = list.filter((r) => isNum(r.wr));
   const tanpa = list.filter((r) => !isNum(r.wr));
   return [...berdata, ...tanpa].slice(0, max);
+}
+
+// ── Prediksi on-demand & ringkasan ───────────────────────────────────────────
+/** Horizon awal: samakan dengan horizon sinyal teknikal pertama yang punya data backtest, kalau tidak ada '1d'. */
+export function defaultHorizon(techRows) {
+  const r = (techRows || []).find((x) => x && isNum(x.wr) && HORIZON_LIST.includes(x.horizon));
+  return r ? r.horizon : '1d';
+}
+
+/**
+ * Nilai fitur yang dilihat model (dari /api/ml-predict) -> satu kalimat awam.
+ * Satuan fitur: rsi14 0-100; dist_ema20, dd_from_high, ret_5 berupa pecahan (0.05 = 5%).
+ */
+export function ringkasFitur(f) {
+  if (!f) return '';
+  const out = [];
+  if (isNum(f.rsi14)) out.push(`RSI ${Math.round(f.rsi14)} (${f.rsi14 < 30 ? 'jenuh jual' : f.rsi14 > 70 ? 'jenuh beli' : 'netral'})`);
+  if (isNum(f.dist_ema20)) out.push(`harga ${Math.abs(f.dist_ema20 * 100).toFixed(1)}% ${f.dist_ema20 >= 0 ? 'di atas' : 'di bawah'} rata-rata 20 hari`);
+  if (isNum(f.dd_from_high) && f.dd_from_high < -0.02) out.push(`${Math.abs(f.dd_from_high * 100).toFixed(0)}% di bawah puncak setahun`);
+  if (isNum(f.ret_5)) out.push(`${f.ret_5 >= 0 ? 'naik' : 'turun'} ${Math.abs(f.ret_5 * 100).toFixed(1)}% dalam 5 hari terakhir`);
+  return out.length ? `${out.join(', ')}.` : '';
+}
+
+/**
+ * Berapa horizon yang lolos uji. Penting untuk kejujuran: kalau 8 horizon diuji sekaligus,
+ * satu yang lolos sendirian bisa saja kebetulan.
+ */
+export function ringkasLolos(horizons) {
+  const daftar = [];
+  let total = 0;
+  for (const k of HORIZON_LIST) {
+    const kartu = horizons?.[k]?.kartu;
+    if (!kartu) continue;
+    total++;
+    if (reliability(kartu).status === 'lolos') daftar.push(k);
+  }
+  return { total, lolos: daftar.length, daftar };
 }

@@ -1816,10 +1816,6 @@ export default function App() {
         closes, opens, highs, lows, vols, ts, price, ath, atl, dd, rsiV, inf, sc, bench,
         chg, hi52, lo52, pos52, ticker: t, smc, signals, todayGap,
         swingSignals, scalpSignals, accumSignals, intradayPattern, preARA, liquidityScore,
-        // Angka AI "sekarang" (0-100) dari baris screener; null kalau detail dibuka tanpa lewat leaderboard.
-        mlLive: effectiveScreenerRow
-          ? { p1d: effectiveScreenerRow.MLScore1d ?? null, p2d: effectiveScreenerRow.MLScore2d ?? null, note: effectiveScreenerRow.MLNote ?? null }
-          : null,
       });
     } catch (e) { setDetailData({ error: e.message }); }
     setDetailLoading(false);
@@ -3699,7 +3695,7 @@ Format padat seperti briefing fund manager. Max 220 kata.`;
                       </div>
 
                       <div className="sec-hdr"><div className="sec-hdr-title">🤖 Teknikal vs Prediksi AI</div></div>
-                      <AiInsightPanel ticker={detailData.ticker} techRows={techRows} mlLive={detailData.mlLive} closes={closes} ts={ts} />
+                      <AiInsightPanel ticker={detailData.ticker} techRows={techRows} closes={closes} ts={ts} />
 
                       <div className="range-bar-wrap">
                         <div className="range-bar-labels">

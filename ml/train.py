@@ -58,30 +58,48 @@ def make_model():
     return LGBMClassifier(max_iter=400, learning_rate=0.03, min_samples_leaf=80)
 
 
+# Horizon yang sama dengan backtest teknikal (lib/core/constants.js: HORIZONS).
+HORIZONS_ALL = [1, 2, 3, 5, 7, 14, 30, 60]
+# ONNX hanya dipakai kolom ML di leaderboard (pages/api/screener.js, FAST_HORIZONS).
+# Panel "Prediksi AI" memakai pohon JSON (tree_<h>d.json) untuk SEMUA horizon.
+ONNX_HORIZONS = {1, 2}
+
+
 def walk_forward(X, y, dates, horizon, n_folds=6, tickers=None):
     """Mengembalikan daftar hasil per fold + prediksi out-of-sample gabungan.
 
-    tickers (opsional, array sejajar dengan X): kalau diberikan, tiap baris
-    prediksi out-of-sample ikut membawa kolom `ticker` dan `date` — dipakai
+    Lipatan dipotong per TANGGAL (bukan per baris), dan ada embargo `horizon`
+    hari bursa antara data latih dan data uji: label baris latih pada tanggal d
+    memakai harga d+horizon, jadi baris latih terakhir harus d + horizon < awal
+    uji. Dulu jeda-nya `horizon` BARIS, padahal satu tanggal berisi ~300 baris
+    (satu per saham) — praktis tanpa jeda, dan makin parah untuk horizon panjang
+    (30/60 hari), karena label latih menyerap pergerakan pasar di masa uji.
+
+    tickers (opsional, sejajar dengan X): kalau diberikan, tiap baris prediksi
+    out-of-sample ikut membawa kolom `ticker` dan `date` — dipakai
     simpan_riwayat_oos() untuk chart per saham di UI.
     """
-    order = np.argsort(dates)
-    X, y, dates = X.iloc[order], y.iloc[order], dates[order]
-    if tickers is not None:
-        tickers = np.asarray(tickers)[order]
-    n = len(X)
-    fold_size = n // (n_folds + 1)
+    dates = np.asarray(dates)
+    y = pd.Series(np.asarray(y))
+    X = X.reset_index(drop=True)
+    tick = None if tickers is None else np.asarray(tickers)
+
+    hari = np.unique(dates)                     # tanggal unik, terurut
+    n_hari = len(hari)
+    idx = np.searchsorted(hari, dates)          # indeks tanggal tiap baris
+    fold_days = n_hari // (n_folds + 1)
     hasil, oos = [], []
 
     for k in range(1, n_folds + 1):
-        train_end = fold_size * k - horizon      # GAP sepanjang horizon
-        test_end = fold_size * (k + 1)
-        if train_end < 500:
+        mulai = fold_days * k
+        akhir = n_hari if k == n_folds else fold_days * (k + 1)
+        tr = idx < (mulai - horizon)            # embargo `horizon` hari
+        te = (idx >= mulai) & (idx < akhir)
+        if tr.sum() < 500 or te.sum() < 100:
             continue
-
-        Xtr, ytr = X.iloc[:train_end], y.iloc[:train_end]
-        Xte, yte = X.iloc[fold_size * k:test_end], y.iloc[fold_size * k:test_end]
-        if len(Xte) < 100 or ytr.nunique() < 2:
+        Xtr, ytr = X[tr], y[tr]
+        Xte, yte = X[te], y[te]
+        if ytr.nunique() < 2:
             continue
 
         m = make_model().fit(Xtr, ytr)
@@ -89,18 +107,19 @@ def walk_forward(X, y, dates, horizon, n_folds=6, tickers=None):
 
         hasil.append({
             "fold": k,
-            "n_train": len(Xtr), "n_test": len(Xte),
+            "n_train": int(tr.sum()), "n_test": int(te.sum()),
             "akurasi": float(((p > 0.5) == yte).mean()),
             "auc": float(roc_auc_score(yte, p)) if yte.nunique() > 1 else None,
             "brier": float(brier_score_loss(yte, p)),
             "baseline_selalu_naik": float(yte.mean()),
-            "uji_dari": str(dates[fold_size * k])[:10],
-            "uji_sampai": str(dates[test_end - 1])[:10],
+            "uji_dari": str(hari[mulai])[:10],
+            "uji_sampai": str(hari[akhir - 1])[:10],
+            "embargo_hari": int(horizon),
         })
         frame = pd.DataFrame({"p": p, "y": yte.values})
-        if tickers is not None:
-            frame["ticker"] = tickers[fold_size * k:test_end]
-            frame["date"] = dates[fold_size * k:test_end]
+        if tick is not None:
+            frame["ticker"] = tick[te]
+            frame["date"] = dates[te]
         oos.append(frame)
 
     return hasil, (pd.concat(oos) if oos else pd.DataFrame())
@@ -122,7 +141,124 @@ def cek_kalibrasi(oos, bins=10):
     ]
 
 
-def simpan_riwayat_oos(oos, out_dir, horizon, max_hari=120):
+def export_onnx(model, n_features, algoritma, path):
+    """Export model ke ONNX dengan probabilitas sebagai TENSOR biasa.
+
+    Default converter (onnxmltools / skl2onnx) menambahkan node ZipMap, sehingga
+    output `probabilities` berupa sequence<map>. onnxruntime-node — yang dipakai
+    pages/api/screener.js di Vercel — TIDAK bisa membaca output non-tensor dan
+    melempar "Non tensor type is temporarily not supported". Hasilnya: MLScore
+    selalu null ("Model ML belum tersedia") walau modelnya ada. Jadi ZipMap
+    dimatikan, lalu bentuk output diperiksa sebelum berkas ditulis.
+    """
+    if algoritma == "lightgbm":
+        from onnxmltools import convert_lightgbm
+        from onnxmltools.convert.common.data_types import FloatTensorType
+        onnx_model = convert_lightgbm(
+            model, initial_types=[("input", FloatTensorType([None, n_features]))],
+            zipmap=False,
+        )
+    else:
+        from skl2onnx import convert_sklearn
+        from skl2onnx.common.data_types import FloatTensorType
+        onnx_model = convert_sklearn(
+            model, initial_types=[("input", FloatTensorType([None, n_features]))],
+            options={id(model): {"zipmap": False}},
+        )
+    # Penjaga: server membaca output TERAKHIR sebagai probabilitas kelas [tidak naik, naik].
+    keluaran = list(onnx_model.graph.output)
+    if not keluaran or keluaran[-1].type.WhichOneof("value") != "tensor_type":
+        raise ValueError("output terakhir model ONNX bukan tensor (masih ZipMap?); "
+                         "onnxruntime-node tidak bisa membacanya")
+    with open(path, "wb") as fh:
+        fh.write(onnx_model.SerializeToString())
+    return path
+
+
+def _pohon_datar(node):
+    """Ratakan pohon bersarang dari booster.dump_model() menjadi larik datar.
+
+    f=fitur, t=ambang, l/r=anak kiri/kanan (>=0: indeks simpul, <0: ~indeks daun),
+    v=nilai daun. Aturan LightGBM untuk fitur numerik: nilai <= ambang -> kiri.
+    """
+    f, t, l, r, v = {}, {}, {}, {}, {}
+
+    def kode(n):
+        if "leaf_index" in n:
+            v[n["leaf_index"]] = float(n["leaf_value"])
+            return ~n["leaf_index"]
+        if n.get("decision_type") != "<=":
+            raise ValueError(f"tipe split {n.get('decision_type')!r} belum didukung evaluator JS")
+        s_ = n["split_index"]
+        f[s_], t[s_] = int(n["split_feature"]), float(n["threshold"])
+        l[s_], r[s_] = kode(n["left_child"]), kode(n["right_child"])
+        return s_
+
+    root = kode(node)
+    if root < 0:                                # pohon satu daun
+        return {"f": [], "t": [], "l": [], "r": [], "v": [v[0]]}
+    return {
+        "f": [f[i] for i in range(len(f))], "t": [t[i] for i in range(len(t))],
+        "l": [l[i] for i in range(len(l))], "r": [r[i] for i in range(len(r))],
+        "v": [v[i] for i in range(len(v))],
+    }
+
+
+def evaluasi_pohon(model_json, X):
+    """Evaluator referensi (Python) — algoritma yang SAMA dengan lib/core/ml-trees.js."""
+    out = np.empty(len(X))
+    for i, x in enumerate(np.asarray(X, dtype=float)):
+        skor = 0.0
+        for tr in model_json["trees"]:
+            if not tr["f"]:
+                skor += tr["v"][0]
+                continue
+            n = 0
+            while n >= 0:
+                n = tr["l"][n] if x[tr["f"][n]] <= tr["t"][n] else tr["r"][n]
+            skor += tr["v"][~n]
+        out[i] = 1.0 / (1.0 + np.exp(-model_json["sigmoid"] * skor))
+    return out
+
+
+def export_trees(model, fitur, horizon, path, contoh):
+    """Simpan ensemble LightGBM sebagai JSON datar untuk dievaluasi langsung di Node.
+
+    Kenapa bukan ONNX: onnxruntime-node adalah modul native yang berat, sulit
+    dibawa ke function Vercel, dan tidak bisa membaca keluaran ZipMap. Ensemble
+    pohon cukup dijumlahkan di JavaScript murni (lib/core/ml-trees.js), tanpa
+    dependensi apa pun. Sebelum berkas ditulis, hasilnya dibandingkan dengan
+    predict_proba model asli pada `contoh` baris; kalau beda, berkas TIDAK ditulis.
+    """
+    if MODEL_NAME != "lightgbm" or not hasattr(model, "booster_"):
+        raise ValueError("export pohon JSON hanya untuk LightGBM (model cadangan sklearn dilewati)")
+    dump = model.booster_.dump_model()
+    objective = str(dump.get("objective", ""))
+    if not objective.startswith("binary"):
+        raise ValueError(f"objective {objective!r} belum didukung")
+    sigmoid = 1.0
+    for bagian in objective.split():
+        if bagian.startswith("sigmoid:"):
+            sigmoid = float(bagian.split(":")[1])
+    payload = {
+        "format": "lgbm-flat-v1",
+        "horizon": f"{horizon}d",
+        "dibuat": datetime.now().isoformat(timespec="seconds"),
+        "fitur": list(fitur),
+        "sigmoid": sigmoid,
+        "trees": [_pohon_datar(ti["tree_structure"]) for ti in dump["tree_info"]],
+    }
+    ref = model.predict_proba(contoh)[:, 1]
+    got = evaluasi_pohon(payload, contoh.values)
+    selisih = float(np.max(np.abs(ref - got)))
+    if selisih > 1e-9:
+        raise ValueError(f"evaluator pohon tidak cocok dengan model asli (selisih maks {selisih:.2e})")
+    with open(path, "w") as fh:
+        json.dump(payload, fh, separators=(",", ":"))
+    return selisih
+
+
+def simpan_riwayat_oos(oos, out_dir, horizon, max_hari=250):
     """Simpan probabilitas out-of-sample per ticker, `max_hari` tanggal terakhir.
 
     Format ringkas: satu daftar tanggal bersama + satu daftar angka per ticker
@@ -160,102 +296,68 @@ def simpan_riwayat_oos(oos, out_dir, horizon, max_hari=120):
     return path
 
 
-def main():
-    ap = argparse.ArgumentParser()
-    ap.add_argument("--horizon", type=int, default=1, choices=[1, 2, 3, 5])
-    ap.add_argument("--years", type=int, default=3)
-    ap.add_argument("--tickers", nargs="*", default=None)
-    ap.add_argument("--out", default="ml/models")
-    args = ap.parse_args()
-
-    import yfinance as yf
-    from watchlist import TICKERS          # ml/watchlist.py
-
-    tickers = args.tickers or TICKERS
+def latih_horizon(h, per_ticker, out_dir):
+    """Latih, uji (walk-forward), dan simpan artefak untuk SATU horizon."""
     frames = []
-    gagal = Counter()
-
-    for t in tickers:
-        try:
-            df = yf.download(f"{t}.JK", period=f"{args.years}y",
-                             interval="1d", progress=False, auto_adjust=False)
-            if df is None or len(df) < 300:
-                continue
-            if isinstance(df.columns, pd.MultiIndex):
-                df.columns = df.columns.get_level_values(0)
-            f = F.build(df)
-            f["y"] = F.label(df, args.horizon)
-            f["ticker"] = t
-            f["date"] = df.index
-            frames.append(f.dropna())
-        except Exception as e:
-            print(f"  lewati {t}: {e}")
-            gagal[classify(e)] += 1
-
-    print_summary(gagal)
+    for t, df, feat in per_ticker:
+        f = feat.copy()
+        f["y"] = F.label(df, h)
+        f["ticker"] = t
+        f["date"] = df.index
+        f = f.dropna()
+        if len(f):
+            frames.append(f)
     if not frames:
-        raise SystemExit("Tidak ada data. Cek koneksi / daftar ticker.")
+        raise SystemExit("tidak ada baris berlabel")
 
     data = pd.concat(frames).sort_values("date")
-    print(f"{len(data):,} baris dari {data['ticker'].nunique()} ticker")
+    print(f"\n=== Horizon {h}D: {len(data):,} baris dari {data['ticker'].nunique()} ticker ===")
 
     X, y = data[F.FEATURE_COLS], data["y"]
-    folds, oos = walk_forward(X, y, data["date"].values, args.horizon,
-                              tickers=data["ticker"].values)
-
+    folds, oos = walk_forward(X, y, data["date"].values, h, tickers=data["ticker"].values)
     if not folds:
-        raise SystemExit("Data tidak cukup untuk walk-forward.")
+        raise SystemExit("data tidak cukup untuk walk-forward")
 
     akurasi = float(np.mean([f["akurasi"] for f in folds]))
     baseline = float(np.mean([f["baseline_selalu_naik"] for f in folds]))
     auc = float(np.mean([f["auc"] for f in folds if f["auc"]]))
     lolos = akurasi > baseline + 0.01 and auc > 0.52
 
-    print(f"\nHorizon {args.horizon}D — akurasi {akurasi:.3f} vs baseline {baseline:.3f}, AUC {auc:.3f}")
+    print(f"Horizon {h}D — akurasi {akurasi:.3f} vs baseline {baseline:.3f}, AUC {auc:.3f}")
     print("LOLOS — layak dipasang" if lolos else
           "TIDAK LOLOS — jangan tampilkan angkanya di UI, model belum mengalahkan baseline")
 
     # Model final dilatih pada SELURUH data, tapi metrik yang dilaporkan tetap
     # dari walk-forward di atas — bukan dari data yang sudah dilihat model.
     final = make_model().fit(X, y)
-    os.makedirs(args.out, exist_ok=True)
+    os.makedirs(out_dir, exist_ok=True)
 
     import pickle
-    with open(f"{args.out}/model_{args.horizon}d.pkl", "wb") as fh:
+    with open(f"{out_dir}/model_{h}d.pkl", "wb") as fh:
         pickle.dump({"model": final, "features": F.FEATURE_COLS}, fh)
 
-    # ── Export ke ONNX ────────────────────────────────────────────────────
-    # Dibutuhkan supaya Vercel (Node.js, tidak ada python3) bisa jalankan
-    # inference langsung saat user pencet tombol Screener — lihat
-    # lib/core/ml-features.js dan pages/api/screener.js (predictMlSafe).
-    # Kalau lolos == False, tetap export (biar dev bisa cek), tapi
-    # predict.py & UI akan tetap menyembunyikan angkanya sampai lolos.
+    # Pohon JSON: dibaca /api/ml-predict (panel Prediksi AI, semua horizon).
+    # Kegagalan export TIDAK boleh menggagalkan training — .pkl & kartu tetap ada.
     try:
-        n_features = len(F.FEATURE_COLS)
-        onnx_path = f"{args.out}/model_{args.horizon}d.onnx"
-        if MODEL_NAME == "lightgbm":
-            from onnxmltools import convert_lightgbm
-            from onnxmltools.convert.common.data_types import FloatTensorType
-            onnx_model = convert_lightgbm(
-                final, initial_types=[("input", FloatTensorType([None, n_features]))],
-            )
-        else:
-            from skl2onnx import convert_sklearn
-            from skl2onnx.common.data_types import FloatTensorType
-            onnx_model = convert_sklearn(
-                final, initial_types=[("input", FloatTensorType([None, n_features]))],
-            )
-        with open(onnx_path, "wb") as fh:
-            fh.write(onnx_model.SerializeToString())
-        print(f"Model diexport ke {onnx_path}")
+        contoh = X.iloc[:: max(1, len(X) // 300)].head(300)
+        selisih = export_trees(final, F.FEATURE_COLS, h, f"{out_dir}/tree_{h}d.json", contoh)
+        print(f"Pohon JSON diexport (selisih vs model asli {selisih:.1e})")
     except Exception as e:
-        # JANGAN gagalkan training kalau cuma export ONNX yang gagal —
-        # model .pkl tetap tersimpan dan bisa diexport ulang manual nanti.
-        print(f"PERINGATAN: gagal export ONNX ({e}). Model .pkl tetap tersimpan, "
-              f"tapi prediksi on-demand di Vercel tidak akan jalan sampai ini diperbaiki.")
+        print(f"PERINGATAN: gagal export pohon JSON horizon {h}D ({e}). "
+              "Tombol Prediksi di UI tidak akan jalan untuk horizon ini.")
+
+    # ONNX hanya untuk horizon cepat yang dibaca screener (kolom ML leaderboard).
+    if h in ONNX_HORIZONS:
+        try:
+            onnx_path = f"{out_dir}/model_{h}d.onnx"
+            export_onnx(final, len(F.FEATURE_COLS), MODEL_NAME, onnx_path)
+            print(f"Model diexport ke {onnx_path}")
+        except Exception as e:
+            print(f"PERINGATAN: gagal export ONNX ({e}). Model .pkl tetap tersimpan, "
+                  f"tapi kolom ML di leaderboard tidak akan jalan sampai ini diperbaiki.")
 
     kartu = {
-        "horizon": f"{args.horizon}d",
+        "horizon": f"{h}d",
         "algoritma": MODEL_NAME,
         "dilatih": datetime.now().isoformat(timespec="seconds"),
         "baris_latih": len(data),
@@ -268,19 +370,81 @@ def main():
         "kalibrasi": cek_kalibrasi(oos),
         "catatan": "Metrik dari walk-forward out-of-sample. Bukan saran finansial.",
     }
-    with open(f"{args.out}/model_{args.horizon}d.json", "w") as fh:
+    with open(f"{out_dir}/model_{h}d.json", "w") as fh:
         json.dump(kartu, fh, indent=2)
-    print(f"Tersimpan di {args.out}/model_{args.horizon}d.*")
+    print(f"Tersimpan di {out_dir}/model_{h}d.*")
 
-    # Riwayat out-of-sample untuk chart UI. Sama seperti export ONNX: kegagalan
-    # di sini TIDAK boleh menggagalkan training — model & kartu sudah tersimpan.
     try:
-        path = simpan_riwayat_oos(oos, args.out, args.horizon)
+        path = simpan_riwayat_oos(oos, out_dir, h)
         if path:
             print(f"Riwayat out-of-sample tersimpan di {path}")
     except Exception as e:
         print(f"PERINGATAN: gagal menyimpan riwayat out-of-sample ({e}). "
               "Model dan kartu model tidak terpengaruh.")
+
+    return {"horizon": h, "lolos": bool(lolos), "akurasi": akurasi, "baseline": baseline, "auc": auc}
+
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--horizon", type=int, default=None, choices=HORIZONS_ALL,
+                    help="satu horizon saja (cara lama)")
+    ap.add_argument("--horizons", default=None,
+                    help="daftar dipisah koma, mis. 1,2,5,30 (default: semua = "
+                         + ",".join(map(str, HORIZONS_ALL)) + ")")
+    ap.add_argument("--years", type=int, default=3)
+    ap.add_argument("--tickers", nargs="*", default=None)
+    ap.add_argument("--out", default="ml/models")
+    args = ap.parse_args()
+
+    if args.horizon:
+        horizons = [args.horizon]
+    elif args.horizons:
+        horizons = sorted({int(x) for x in args.horizons.split(",") if x.strip()})
+        bad = [h for h in horizons if h not in HORIZONS_ALL]
+        if bad:
+            raise SystemExit(f"horizon tidak dikenal: {bad}. Pilihan: {HORIZONS_ALL}")
+    else:
+        horizons = HORIZONS_ALL
+
+    import yfinance as yf
+    from watchlist import TICKERS          # ml/watchlist.py
+
+    tickers = args.tickers or TICKERS
+    per_ticker = []                        # (ticker, df, fitur) — data diunduh SEKALI untuk semua horizon
+    gagal = Counter()
+
+    for t in tickers:
+        try:
+            df = yf.download(f"{t}.JK", period=f"{args.years}y",
+                             interval="1d", progress=False, auto_adjust=False)
+            if df is None or len(df) < 300:
+                continue
+            if isinstance(df.columns, pd.MultiIndex):
+                df.columns = df.columns.get_level_values(0)
+            per_ticker.append((t, df, F.build(df)))
+        except Exception as e:
+            print(f"  lewati {t}: {e}")
+            gagal[classify(e)] += 1
+
+    print_summary(gagal)
+    if not per_ticker:
+        raise SystemExit("Tidak ada data. Cek koneksi / daftar ticker.")
+    print(f"{len(per_ticker)} ticker berhasil diunduh. Horizon yang dilatih: {horizons}")
+
+    ringkasan = []
+    for h in horizons:
+        try:
+            ringkasan.append(latih_horizon(h, per_ticker, args.out))
+        except (SystemExit, Exception) as e:      # satu horizon gagal tidak menghentikan yang lain
+            print(f"\nHorizon {h}D dilewati: {e}")
+
+    if not ringkasan:
+        raise SystemExit("Tidak ada horizon yang berhasil dilatih.")
+    print("\n=== RINGKASAN ===")
+    for r in ringkasan:
+        print(f"  {r['horizon']:>2}D  akurasi {r['akurasi']:.3f}  baseline {r['baseline']:.3f}  "
+              f"AUC {r['auc']:.3f}  {'LOLOS' if r['lolos'] else 'tidak lolos'}")
 
 
 if __name__ == "__main__":
