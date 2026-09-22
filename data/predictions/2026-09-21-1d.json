@@ -1,1 +1,1 @@
-{"tanggal":"2026-09-21","horizon":"1d","model":{"algoritma":"lightgbm","dilatih":"2026-09-21T03:10:31","akurasi_walk_forward":0.6373,"baseline_selalu_naik":0.3658,"auc":0.6024},"disclaimer":"Probabilitas statistik dari data historis. Bukan ramalan, bukan saran finansial.","prediksi":{}}
+{"tanggal":"2026-09-21","horizon":"1d","model":{"algoritma":"lightgbm","dilatih":"2026-09-21T16:50:10","akurasi_walk_forward":0.6369,"baseline_selalu_naik":0.3658,"auc":0.6023},"disclaimer":"Probabilitas statistik dari data historis. Bukan ramalan, bukan saran finansial.","prediksi":{}}
