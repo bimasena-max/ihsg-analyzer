@@ -333,7 +333,11 @@ export function alignment(techRows, p) {
       text: 'Sinyal teknikalnya historisnya kurang bagus (winrate di bawah 50%) dan AI juga condong turun.' };
   }
   return { code: 'berlawanan', tone: 'amber', title: 'Teknikal dan AI tidak searah',
-    text: 'Yang satu condong naik, yang lain tidak. Cek dulu sebelum ambil.' };
+    text: 'Yang satu condong naik, yang lain tidak. Wajar beda pendapat: winrate teknikal '
+      + 'dihitung khusus dari hari-hari saat pola itu persis muncul, sedangkan AI menilai dari '
+      + 'pola umum di seluruh saham tanpa tahu pola teknikal spesifik sedang aktif — dua cara '
+      + 'baca yang beda, bukan berarti salah satu keliru. Anggap ini sinyal buat lebih hati-hati, '
+      + 'bukan buat memilih salah satu.' };
 }
 
 /**
