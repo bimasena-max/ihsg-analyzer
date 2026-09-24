@@ -270,7 +270,7 @@ export function AiInsightView({
   const align = useMemo(() => alignment(techRows, pNow), [techRows, pNow]);
   const kal = useMemo(() => calibrationLookup(kartu?.kalibrasi, pNow), [kartu, pNow]);
 
-  const aiRow = useMemo(() => ringkasBarisAI(pNow, record, avgNaik, avgTurun), [pNow, record, avgNaik, avgTurun]);
+  const aiRow = useMemo(() => ringkasBarisAI(pNow, record, avgNaik, avgTurun, win), [pNow, record, avgNaik, avgTurun, win]);
   const fiturTeks = pred && pred.fitur ? ringkasFitur(pred.fitur) : '';
 
   // Garis proyeksi di chart (lihat proyeksiHarga di ai-insight-logic.js untuk penjelasan angkanya)
@@ -308,15 +308,11 @@ export function AiInsightView({
           ))}
 
           <Row badge="AI" badgeColor="var(--purple)"
-            arrow={pNow != null && pNow < 0.5 ? '▼' : '▲'} arrowColor="var(--purple)"
-            title={`Saat AI menebak naik (di atas 50%)`}
-            wr={aiWR} avg={aiAvg}
-            meta={record && record.naikN >= 5
-              ? `${record.naikN} hari dari ${win} hari terakhir · ${HORIZON_LABEL[hz]} ke depan`
-              : record && record.n > 0 ? 'terlalu sedikit tebakan naik untuk dihitung' : 'belum ada rekam jejak'}
-            note={muted
-              ? 'Model belum lolos uji, anggap ini referensi saja.'
-              : (record && record.naikN >= 5 && record.kecil ? 'Sampel masih kecil, jangan dijadikan patokan.' : null)} />
+            arrow={aiRow.arrow} arrowColor={aiRow.arrowColor}
+            title={aiRow.title}
+            wr={aiRow.wr} avg={aiRow.avg}
+            meta={aiRow.meta}
+            note={muted ? 'Model belum lolos uji, anggap ini referensi saja.' : aiRow.note} />
 
           <div className="aip-align" style={{ borderLeftColor: TONE[align.tone], background: TONE_BG[align.tone] }}>
             <b style={{ color: TONE[align.tone] }}>{align.title}</b>

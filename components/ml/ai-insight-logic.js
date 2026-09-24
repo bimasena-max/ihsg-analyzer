@@ -49,6 +49,53 @@ export function signed(x, d = 1) {
   return `${x >= 0 ? '+' : '−'}${Math.abs(x).toFixed(d)}`;
 }
 
+/**
+ * Ringkasan baris "AI" di kartu kiri (panah, winrate, rata-rata, teks meta).
+ * Arah dipilih pakai callFor() — ambang 35/60 yang SAMA dengan proyeksi di
+ * chart kanan — supaya baris ini tidak pernah bilang "naik" sementara chart
+ * bilang "datar", atau sebaliknya.
+ */
+export function ringkasBarisAI(pNow, record, avgNaik, avgTurun, win) {
+  const call = callFor(pNow);
+
+  if (call === 'none') {
+    return {
+      arrow: '▬', arrowColor: 'var(--muted)',
+      title: 'Belum ada tebakan AI',
+      wr: null, avg: null,
+      meta: 'tekan tombol Prediksi dulu',
+      note: null,
+    };
+  }
+
+  if (call === 'netral') {
+    return {
+      arrow: '▬', arrowColor: 'var(--amber)',
+      title: `AI netral (${pct(ML_BEARISH, 0)}%–${pct(ML_BULLISH, 0)}%)`,
+      wr: null, avg: null,
+      meta: 'di luar rentang ini baru dianggap AI menebak arah',
+      note: null,
+    };
+  }
+
+  const naik = call === 'naik';
+  const n = naik ? (record?.naikN ?? 0) : (record?.turunN ?? 0);
+  const hits = naik ? (record?.naikHits ?? 0) : (record?.turunHits ?? 0);
+  const wr = n > 0 ? Math.round((hits / n) * 100) : null;
+  const avg = naik ? avgNaik : avgTurun;
+
+  return {
+    arrow: naik ? '▲' : '▼',
+    arrowColor: naik ? 'var(--green)' : 'var(--red)',
+    title: `Saat AI menebak ${naik ? 'naik (60%+)' : 'turun (35%−)'}`,
+    wr, avg,
+    meta: n >= 5
+      ? `${n} hari dari ${win} hari terakhir · menebak ${naik ? 'naik' : 'turun'}`
+      : (record && record.n > 0 ? `terlalu sedikit tebakan ${naik ? 'naik' : 'turun'} untuk dihitung` : 'belum ada rekam jejak'),
+    note: n >= 5 && record?.kecil ? 'Sampel masih kecil, jangan dijadikan patokan.' : null,
+  };
+}
+
 /** '60d' -> '60 hari' */
 export function horizonHari(h) {
   const m = /^(\d+)d$/.exec(String(h || ''));
