@@ -18,11 +18,11 @@
 
 import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import {
-  ML_BULLISH, ML_BEARISH, HORIZON_LIST, HORIZON_BARS, HORIZON_LABEL, windowBars,
-  tanggalID, pct, signed, horizonHari, callFor, verdictFor, bacaAngka,
+  HORIZON_LIST, HORIZON_BARS, HORIZON_LABEL, windowBars,
+  tanggalID, pct, signed, horizonHari, verdictFor, bacaAngka,
   isoFromEpoch, pricesFromChartJson, alignSeries, buildPoints, trackRecord,
   calibrationLookup, reliability, alignment, pickTechRows,
-  defaultHorizon, ringkasFitur, ringkasLolos,
+  defaultHorizon, ringkasFitur, ringkasLolos, proyeksiHarga,
 } from './ai-insight-logic';
 
 const MIN_BAR_PROPS = 200;  // di bawah ini panel ambil harga 1 tahun sendiri (horizon panjang butuh riwayat)
@@ -36,65 +36,38 @@ const TONE_BG = { green: 'var(--green-dim)', red: 'var(--red-dim)', amber: 'var(
 // ─────────────────────────────────────────────────────────────────────────────
 // Gambar hasil prediksi AI
 // ─────────────────────────────────────────────────────────────────────────────
-export function AiChart({ width, height = 320, dates, closes, points, from, hz, pNow, nowIdx, hover, onHover, muted }) {
+export function AiChart({ width, height = 320, dates, closes, points, from, proyeksi, hover, onHover, muted }) {
   const last = closes.length - 1;
   const n = last - from + 1;
   if (!(width > 120) || n < 2) return null;
 
-  const narrow = width < 480;                        // HP: kotak prediksi dibuang, angkanya sudah ada di tombol 1/2 hari
-  const padL = 50, padR = 8, padT = 10, padB = 22;
-  const futW = narrow ? 0 : 96;                      // ruang tetap di kanan untuk kotak prediksi
-  const innerW = Math.max(40, width - padL - padR - futW);
+  const narrow = width < 480;
+  const padL = 50, padR = 10, padT = 14, padB = 22;
+  const projW = narrow ? 78 : 108;                    // ruang tetap di kanan untuk garis proyeksi + labelnya
+  const innerW = Math.max(40, width - padL - padR - projW);
   const step = innerW / (n - 1);
   const X = (i) => padL + (i - from) * step;
-  const xFut = padL + innerW + 10;                   // awal zona prediksi
+  const xProj = padL + innerW + projW - 4;             // ujung kanan garis proyeksi
 
-  const innerH = height - padT - padB;
-  const rib = 16;                                    // strip hasil tebakan di antara dua panel
-  const gap = 8;
-  const hTop = Math.round((innerH - rib - gap * 2) * 0.58);
-  const hBot = innerH - rib - gap * 2 - hTop;
+  const rib = 18;                                      // strip hasil tebakan, di bawah garis harga
+  const gap = 10;
+  const hPrice = height - padT - padB - rib - gap;
   const yTop0 = padT;
-  const yRib0 = padT + hTop + gap;
+  const yRib0 = padT + hPrice + gap;
   const yRibMid = yRib0 + rib / 2;
-  const yBot0 = yRib0 + rib + gap;
 
-  // skala harga
+  // skala harga: ikut sertakan titik proyeksi supaya garisnya tidak terpotong
   let lo = Infinity, hi = -Infinity;
   for (let i = from; i <= last; i++) { lo = Math.min(lo, closes[i]); hi = Math.max(hi, closes[i]); }
-  const pad = (hi - lo) * 0.14 || hi * 0.02;
+  const hargaProyeksi = proyeksi ? closes[last] * (1 + proyeksi.persen / 100) : null;
+  if (isNum(hargaProyeksi)) { lo = Math.min(lo, hargaProyeksi); hi = Math.max(hi, hargaProyeksi); }
+  const pad = (hi - lo) * 0.16 || hi * 0.02;
   lo -= pad; hi += pad;
-  const YP = (v) => yTop0 + hTop - ((v - lo) / (hi - lo)) * hTop;
+  const YP = (v) => yTop0 + hPrice - ((v - lo) / (hi - lo)) * hPrice;
 
-  // skala probabilitas: selalu memuat 35%-65% supaya garis acuan 35/50/60 selalu terlihat
-  let pmin = 0.5, pmax = 0.5;
-  for (let i = from; i <= last; i++) {
-    const pt = points[i];
-    if (pt) { pmin = Math.min(pmin, pt.p); pmax = Math.max(pmax, pt.p); }
-  }
-  if (isNum(pNow)) { pmin = Math.min(pmin, pNow); pmax = Math.max(pmax, pNow); }
-  const plo = Math.max(0, Math.min(0.35, pmin - 0.03));
-  const phi = Math.min(1, Math.max(0.65, pmax + 0.03));
-  const YQ = (p) => yBot0 + hBot - ((p - plo) / (phi - plo)) * hBot;
-
-  // garis harga
+  // garis harga (riwayat asli — SELALU abu-abu/putih, tidak pernah ikut diwarnai)
   let pricePath = '';
   for (let i = from; i <= last; i++) pricePath += `${i === from ? 'M' : 'L'}${X(i).toFixed(1)},${YP(closes[i]).toFixed(1)}`;
-
-  // garis probabilitas AI: satu "run" per sumber, disambung ke titik sebelumnya kalau bar-nya berurutan
-  const runs = [];
-  let cur = null;
-  for (let i = from; i <= last; i++) {
-    const pt = points[i];
-    if (!pt) { cur = null; continue; }
-    const xy = [X(i), YQ(pt.p)];
-    if (cur && cur.src === pt.src) cur.pts.push(xy);
-    else {
-      const prev = points[i - 1];
-      cur = { src: pt.src, pts: prev && i - 1 >= from ? [[X(i - 1), YQ(prev.p)], xy] : [xy] };
-      runs.push(cur);
-    }
-  }
 
   // tick tanggal
   const ticks = [];
@@ -110,49 +83,24 @@ export function AiChart({ width, height = 320, dates, closes, points, from, hz, 
     onHover?.(i < from || i > last ? null : i);
   };
 
-  const pill = (yc, hzKey, p) => {
-    const tone = { naik: 'green', turun: 'red', netral: 'amber', none: 'muted' }[callFor(p)];
-    const arrow = p == null ? '' : p > 0.5 ? '▲ ' : p < 0.5 ? '▼ ' : '';
-    const active = hzKey === hz;
-    return (
-      <g key={hzKey}>
-        <rect x={xFut} y={yc - 11} width={futW - 8} height={22} rx={11}
-          fill={TONE_BG[tone]} stroke={TONE[tone]} strokeWidth={active ? 1.8 : 1}
-          strokeDasharray={p == null ? '3 3' : undefined} opacity={active ? 1 : 0.7} />
-        <text x={xFut + (futW - 8) / 2} y={yc + 4} textAnchor="middle" fontSize="10.5" fontWeight="700"
-          fill={TONE[tone]} fontFamily="'DM Mono',monospace">
-          {HORIZON_LABEL[hzKey]} {p == null ? '—' : `${arrow}${Math.round(p * 100)}%`}
-        </text>
-      </g>
-    );
-  };
-
   const yLast = YP(closes[last]);
-  const yPill1 = Math.min(Math.max(yLast - 15, yTop0 + 34), yTop0 + hTop - 40);
-  // Prediksi dihitung dari penutupan terakhir yang final: kalau bar hari ini belum selesai,
-  // cincin diletakkan di bar sebelumnya (nowIdx), bukan di ujung.
-  const xNow = X(isNum(nowIdx) && nowIdx >= from && nowIdx <= last ? nowIdx : last);
+  const warna = proyeksi?.arah === 'naik' ? 'var(--green)' : proyeksi?.arah === 'turun' ? 'var(--red)' : 'var(--amber)';
+  const yProj = isNum(hargaProyeksi) ? YP(hargaProyeksi) : yLast;
 
-  const aria = `Grafik harga ${n} hari terakhir dengan tebakan arah AI. Hijau berarti tebakan benar, merah berarti meleset.`;
+  const aria = proyeksi
+    ? `Grafik harga ${n} hari terakhir, disambung garis putus-putus ${proyeksi.arah === 'naik' ? 'hijau naik' : proyeksi.arah === 'turun' ? 'merah turun' : 'kuning datar'} yang menunjukkan proyeksi AI.`
+    : `Grafik harga ${n} hari terakhir. Tekan tombol Prediksi untuk menambahkan proyeksi AI.`;
 
   return (
     <svg viewBox={`0 0 ${width} ${height}`} width={width} height={height} role="img" aria-label={aria}
-      style={{ display: 'block', touchAction: 'pan-y', opacity: muted ? 0.55 : 1 }}
+      style={{ display: 'block', touchAction: 'pan-y', opacity: muted ? 0.6 : 1 }}
       onPointerMove={handleMove} onPointerDown={handleMove} onPointerLeave={() => onHover?.(null)}>
 
       {/* panel */}
-      <rect x={padL - 2} y={yTop0} width={innerW + 4} height={hTop} rx={8} fill="var(--bg2)" />
-      <rect x={padL - 2} y={yBot0} width={innerW + 4} height={hBot} rx={8} fill="var(--bg2)" />
+      <rect x={padL - 2} y={yTop0} width={innerW + projW + 4} height={hPrice} rx={8} fill="var(--bg2)" />
 
-      {/* zona prediksi */}
-      {!narrow && (
-        <g>
-          <rect x={xFut - 6} y={yTop0} width={futW} height={hTop} rx={8} fill="var(--blue-dim)" opacity="0.55" />
-          <text x={xFut + (futW - 8) / 2} y={yTop0 + 15} textAnchor="middle" fontSize="10" fill="var(--muted)"
-            fontFamily="'DM Sans',sans-serif">prediksi AI</text>
-          {pill(yPill1, hz, pNow ?? null)}
-        </g>
-      )}
+      {/* batas antara "sudah terjadi" dan "proyeksi" */}
+      <line x1={X(last)} x2={X(last)} y1={yTop0} y2={yTop0 + hPrice} stroke="var(--border2)" strokeWidth="1" strokeDasharray="2 3" opacity="0.7" />
 
       {/* label harga */}
       {[hi - pad, (hi + lo) / 2, lo + pad].map((v, k) => (
@@ -160,51 +108,37 @@ export function AiChart({ width, height = 320, dates, closes, points, from, hz, 
           fontFamily="'DM Mono',monospace">{Math.round(v).toLocaleString('id-ID')}</text>
       ))}
       {[0.25, 0.5, 0.75].map((f) => (
-        <line key={f} x1={padL - 2} x2={padL + innerW + 2} y1={yTop0 + hTop * f} y2={yTop0 + hTop * f}
-          stroke="var(--border)" strokeWidth="1" opacity="0.6" />
+        <line key={f} x1={padL - 2} x2={padL + innerW + projW + 2} y1={yTop0 + hPrice * f} y2={yTop0 + hPrice * f}
+          stroke="var(--border)" strokeWidth="1" opacity="0.5" />
       ))}
 
-      {/* harga */}
-      <path d={pricePath} fill="none" stroke="var(--text2)" strokeWidth="1.6" strokeLinejoin="round" />
+      {/* harga: SELALU abu-abu/putih — ini yang sudah benar-benar terjadi */}
+      <path d={pricePath} fill="none" stroke="var(--text2)" strokeWidth="1.7" strokeLinejoin="round" />
+      <circle cx={X(last)} cy={yLast} r={3.2} fill="var(--text)" />
 
-      {/* garis acuan probabilitas */}
-      {[[ML_BULLISH, 'var(--green)', '4 4', '60%'], [0.5, 'var(--border2)', undefined, '50%'], [ML_BEARISH, 'var(--red)', '4 4', '35%']].map(([v, c, dash, t]) => (
-        <g key={t}>
-          <line x1={padL - 2} x2={padL + innerW + 2} y1={YQ(v)} y2={YQ(v)} stroke={c} strokeWidth="1"
-            strokeDasharray={dash} opacity={dash ? 0.65 : 1} />
-          <text x={padL - 8} y={YQ(v) + 3} textAnchor="end" fontSize="10" fill="var(--muted)"
-            fontFamily="'DM Mono',monospace">{t}</text>
-        </g>
-      ))}
-      <text x={padL + 6} y={yBot0 + 12} fontSize="10" fill="var(--muted)" fontFamily="'DM Sans',sans-serif">
-        peluang naik menurut AI
-      </text>
-      {!points.slice(from, last + 1).some(Boolean) && !isNum(pNow) && (
-        <text x={padL + innerW / 2} y={yBot0 + hBot / 2 + 12} textAnchor="middle" fontSize="11" fill="var(--muted)"
-          fontFamily="'DM Sans',sans-serif">belum ada riwayat prediksi AI untuk saham ini</text>
-      )}
-
-      {/* garis + titik probabilitas */}
-      {runs.map((r, k) => r.pts.length > 1 && (
-        <polyline key={k} points={r.pts.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ')}
-          fill="none" stroke={r.src === 'harian' ? 'var(--purple)' : 'var(--blue)'}
-          strokeWidth={r.src === 'harian' ? 2 : 1.5} opacity={r.src === 'harian' ? 1 : 0.8} strokeLinejoin="round" />
-      ))}
-      {points.slice(from, last + 1).map((pt, k) => pt && (
-        <circle key={k} cx={X(from + k)} cy={YQ(pt.p)} r={pt.src === 'harian' ? 2.4 : 1.7}
-          fill={pt.src === 'harian' ? 'var(--purple)' : 'var(--blue)'} />
-      ))}
-      {isNum(pNow) && (
+      {/* proyeksi: garis putus-putus berwarna, disambung LANGSUNG dari titik harga terakhir */}
+      {proyeksi ? (
         <g>
-          <circle cx={xNow} cy={YQ(pNow)} r={5} fill="none" stroke="var(--text)" strokeWidth="1.6" />
-          <text x={xNow - 9} y={YQ(pNow) - 8} textAnchor="end" fontSize="10.5" fontWeight="700" fill="var(--text)"
-            fontFamily="'DM Mono',monospace">sekarang {Math.round(pNow * 100)}%</text>
+          <line x1={X(last)} y1={yLast} x2={xProj} y2={yProj} stroke={warna} strokeWidth="2.4"
+            strokeDasharray="7 5" strokeLinecap="round" opacity={proyeksi.pakaiData ? 1 : 0.55} />
+          <circle cx={xProj} cy={yProj} r={4.2} fill={warna} opacity={proyeksi.pakaiData ? 1 : 0.55} />
+          <text x={xProj} y={Math.max(yTop0 + 11, Math.min(yTop0 + hPrice - 34, yProj - 20))} textAnchor="end" fontSize="11" fontWeight="700"
+            fill={warna} fontFamily="'DM Sans',sans-serif">
+            {proyeksi.arah === 'naik' ? '▲ naik' : proyeksi.arah === 'turun' ? '▼ turun' : '▬ datar'}
+          </text>
+          <text x={xProj} y={Math.max(yTop0 + 11, Math.min(yTop0 + hPrice - 34, yProj - 20)) + 14} textAnchor="end" fontSize="13" fontWeight="800"
+            fill={warna} fontFamily="'DM Mono',monospace">
+            {proyeksi.pakaiData ? `${signed(proyeksi.persen, 1)}%` : '?'}
+          </text>
         </g>
+      ) : (
+        <text x={padL + innerW / 2 + projW / 2} y={yTop0 + hPrice / 2} textAnchor="middle" fontSize="11" fill="var(--muted)"
+          fontFamily="'DM Sans',sans-serif">tekan Prediksi untuk lihat proyeksi →</text>
       )}
 
-      {/* strip hasil tebakan: satu segitiga per hari, warna = benar / meleset / belum ketahuan */}
+      {/* strip hasil tebakan (riwayat): satu segitiga per hari, warna = benar / meleset / belum ketahuan */}
       <text x={padL - 6} y={yRibMid + 3} textAnchor="end" fontSize="10" fill="var(--muted)"
-        fontFamily="'DM Mono',monospace">tebakan</text>
+        fontFamily="'DM Mono',monospace">riwayat</text>
       {points.slice(from, last + 1).map((pt, k) => {
         if (!pt || pt.lean == null) return null;
         const i = from + k;
@@ -220,9 +154,10 @@ export function AiChart({ width, height = 320, dates, closes, points, from, hz, 
             strokeWidth={pt.outcome === 'pending' ? 1.1 : 0.4} />
         );
       })}
-
-      {/* titik harga terakhir */}
-      <circle cx={X(last)} cy={yLast} r={3.2} fill="var(--text)" />
+      {!points.slice(from, last + 1).some(Boolean) && (
+        <text x={padL + innerW / 2} y={yRibMid + 3} textAnchor="middle" fontSize="9.5" fill="var(--muted)"
+          fontFamily="'DM Sans',sans-serif">belum ada riwayat tebakan AI untuk saham ini</text>
+      )}
 
       {/* sumbu tanggal */}
       {ticks.map((i, k) => (
@@ -231,11 +166,16 @@ export function AiChart({ width, height = 320, dates, closes, points, from, hz, 
           {tanggalID(dates[i], { tahun: false })}
         </text>
       ))}
+      {proyeksi && (
+        <text x={xProj} y={height - 6} fontSize="10" fill="var(--muted)" fontFamily="'DM Mono',monospace" textAnchor="end">
+          +{proyeksi.horizonHari}h
+        </text>
+      )}
 
-      {/* garis bidik saat disentuh/di-hover */}
+      {/* garis bidik saat disentuh/di-hover (cuma di bagian riwayat) */}
       {hoverX != null && (
         <g pointerEvents="none">
-          <line x1={hoverX} x2={hoverX} y1={yTop0} y2={yBot0 + hBot} stroke="var(--text2)" strokeWidth="1" opacity="0.7" />
+          <line x1={hoverX} x2={hoverX} y1={yTop0} y2={yRib0 + rib} stroke="var(--text2)" strokeWidth="1" opacity="0.7" />
           <circle cx={hoverX} cy={YP(closes[hover])} r={3.6} fill="var(--bg)" stroke="var(--text)" strokeWidth="1.6" />
         </g>
       )}
@@ -311,19 +251,19 @@ export function AiInsightView({
   const asOf = pred && pred.status === 'ok' ? pred.asOf : null;
 
   // deret + titik + rekam jejak untuk horizon terpilih
-  const { points, from, record, avgNaik, nowIdx } = useMemo(() => {
-    if (!harga) return { points: [], from: 0, record: null, avgNaik: null, nowIdx: -1 };
+  const { points, from, record, avgNaik, avgTurun } = useMemo(() => {
+    if (!harga) return { points: [], from: 0, record: null, avgNaik: null, avgTurun: null };
     const ai = alignSeries(harga.dates, hzData?.uji_mundur || null, hzData?.harian || []);
     const pts = buildPoints(harga.closes, ai, h);
     const start = Math.max(0, harga.closes.length - win);
     const vis = pts.slice(start);
     const rec = trackRecord(vis, harga.closes, h);
-    const naik = vis.filter((p) => p && p.lean === 'naik' && (p.outcome === 'hit' || p.outcome === 'miss') && isNum(p.ret));
-    const avg = naik.length ? (naik.reduce((s, p) => s + p.ret, 0) / naik.length) * 100 : null;
-    let idx = harga.dates.length - 1;
-    if (asOf) { const j = harga.dates.lastIndexOf(asOf); if (j >= 0) idx = j; }
-    return { points: pts, from: start, record: rec, avgNaik: avg, nowIdx: idx };
-  }, [harga, hzData, h, win, asOf]);
+    const rataRata = (lean) => {
+      const arr = vis.filter((p) => p && p.lean === lean && (p.outcome === 'hit' || p.outcome === 'miss') && isNum(p.ret));
+      return arr.length ? (arr.reduce((s, p) => s + p.ret, 0) / arr.length) * 100 : null;
+    };
+    return { points: pts, from: start, record: rec, avgNaik: rataRata('naik'), avgTurun: rataRata('turun') };
+  }, [harga, hzData, h, win]);
 
   const verdict = verdictFor(pNow);
   const teknik = useMemo(() => pickTechRows(techRows, 4), [techRows]);
@@ -333,6 +273,9 @@ export function AiInsightView({
   const aiWR = record && record.naikN >= 5 ? Math.round((record.naikHits / record.naikN) * 1000) / 10 : null;
   const aiAvg = record && record.naikN >= 5 ? avgNaik : null;
   const fiturTeks = pred && pred.fitur ? ringkasFitur(pred.fitur) : '';
+
+  // Garis proyeksi di chart (lihat proyeksiHarga di ai-insight-logic.js untuk penjelasan angkanya)
+  const proyeksi = useMemo(() => proyeksiHarga(pNow, record, avgNaik, avgTurun, h), [pNow, record, avgNaik, avgTurun, h]);
 
   return (
     <div className="aip-wrap">
@@ -438,7 +381,7 @@ export function AiInsightView({
           <div ref={chartRef} className="aip-chart">
             {harga && chartWidth > 0 && (
               <AiChart width={chartWidth} dates={harga.dates} closes={harga.closes} points={points} from={from}
-                hz={hz} pNow={pNow} nowIdx={nowIdx} hover={hover} onHover={setHover} muted={muted} />
+                proyeksi={proyeksi} hover={hover} onHover={setHover} muted={muted} />
             )}
             {!harga && (
               <div className="aip-empty" style={{ padding: '3rem 0' }}>
@@ -452,22 +395,15 @@ export function AiInsightView({
               ? hoverText(hover, harga.dates, harga.closes, points, hz)
               : (
                 <span>
-                  Baris “tebakan” = arah tebakan AI tiap hari (▲ naik, ▼ turun):{' '}
+                  Garis putih = harga yang sudah terjadi. Garis putus-putus{' '}
+                  <span style={{ color: 'var(--green)' }}>hijau</span>/<span style={{ color: 'var(--red)' }}>merah</span> di ujung kanan = proyeksi AI.
+                  Baris segitiga di bawahnya = tebakan AI di hari-hari lalu:{' '}
                   <span style={{ color: 'var(--green)' }}>hijau benar</span> ·{' '}
                   <span style={{ color: 'var(--red)' }}>merah meleset</span> ·{' '}
-                  <span style={{ color: 'var(--muted)' }}>abu belum ketahuan</span> · besar = AI yakin.
-                  {' '}<span style={{ color: 'var(--blue)' }}>Garis biru</span> uji mundur,{' '}
-                  <span style={{ color: 'var(--purple)' }}>ungu</span> prediksi harian.
+                  <span style={{ color: 'var(--muted)' }}>abu belum ketahuan</span> · besar = AI yakin. Arahkan kursor ke garis putih untuk detail tiap hari.
                 </span>
               )}
           </div>
-
-          {harga && record && record.n === 0 && (
-            <div className="aip-note" style={{ marginTop: 6 }}>
-              Riwayat tebakan AI untuk horizon {HORIZON_LABEL[hz]} belum ada, jadi belum ada segitiga di grafik. Terisi otomatis
-              setelah model dilatih ulang (tiap Senin, atau saat workflow dijalankan manual).
-            </div>
-          )}
         </div>
       </div>
 
@@ -557,15 +493,18 @@ export function AiInsightView({
         <details className="aip-how" open>
           <summary>Cara membaca gambar ini</summary>
           <ul>
-            <li><b>Garis atas</b> adalah harga. Baris segitiga tepat di bawahnya = tebakan arah AI pada hari itu
-              (▲ naik, ▼ turun) untuk horizon yang kamu pilih. Hijau berarti tebakannya benar, merah berarti meleset,
-              abu berarti hasilnya belum ketahuan. Segitiga besar = AI yakin (60% ke atas atau 35% ke bawah).</li>
-            <li><b>Garis bawah</b> adalah peluang naik menurut AI. Di atas 50% berarti AI menebak naik; 60% ke atas dianggap condong naik,
-              35% ke bawah condong turun. Di antaranya AI belum yakin.</li>
-            <li><b>Kotak di kanan</b> adalah hasil tombol Prediksi untuk horizon terpilih: peluang harga {HORIZON_LABEL[hz]} lagi
-              lebih tinggi dari penutupan terakhir. Itu peluang, bukan target harga.</li>
-            <li><b>Garis biru</b> = uji mundur: AI menebak ulang hari-hari lalu memakai data yang tidak dilihatnya saat belajar.
-              <b> Garis ungu</b> = prediksi harian yang dicatat sebelum hasilnya ada, jadi yang paling jujur.</li>
+            <li><b>Garis putih</b> adalah harga yang sudah benar-benar terjadi. Berhenti di titik bulat putih —
+              itu harga penutupan terakhir yang dipakai model.</li>
+            <li><b>Garis putus-putus hijau/merah</b> di ujung kanan adalah proyeksi AI untuk {HORIZON_LABEL[hz]}
+              ke depan: hijau kalau AI menebak naik, merah kalau menebak turun. Angka di ujungnya (misal "+2.3%")
+              adalah rata-rata hasil sebenarnya di masa lalu setiap kali AI menebak arah yang sama untuk saham ini —
+              bukan janji, tapi pola historis. Kalau riwayatnya masih terlalu sedikit, cuma arahnya yang ditampilkan
+              (tanpa angka), lebih pudar warnanya.</li>
+            <li><b>Baris segitiga "riwayat"</b> di bawah garis harga menunjukkan tebakan AI di hari-hari lalu
+              (▲ naik, ▼ turun). Hijau berarti tebakannya benar, merah berarti meleset, abu berarti hasilnya
+              belum ketahuan. Segitiga besar = AI yakin (60% ke atas atau 35% ke bawah). Arahkan kursor ke garis
+              putih untuk lihat detail satu hari, termasuk apakah itu dari uji mundur (data lama, diuji ulang) atau
+              prediksi harian yang dicatat sebelum hasilnya ada (lebih bisa dipercaya).</li>
           </ul>
         </details>
 

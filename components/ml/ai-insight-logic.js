@@ -336,3 +336,30 @@ export function ringkasLolos(horizons) {
   }
   return { total, lolos: daftar.length, daftar };
 }
+
+/**
+ * Garis proyeksi di chart: arah dari tebakan AI (leanFor, ambang 50% — sama dengan yang
+ * dipakai menilai rekam jejak), besarnya dari RATA-RATA hasil historis saat AI menebak arah
+ * yang sama untuk saham ini. Kalau sampelnya < 5 kejadian, kembalikan arah saja tanpa angka
+ * pasti (pakaiData: false) — lebih baik jujur "belum cukup data" daripada mengarang angka.
+ *   pNow: probabilitas naik sekarang (0-1) atau null kalau belum ditekan tombol Prediksi
+ *   record: hasil trackRecord() untuk horizon yang sama (perlu naikN/turunN)
+ *   avgNaik/avgTurun: rata-rata return (persen) saat AI menebak naik/turun, dari points yang sama
+ *   h: jumlah hari bursa horizon (angka, bukan '5d')
+ */
+export function proyeksiHarga(pNow, record, avgNaik, avgTurun, h) {
+  if (!isNum(pNow)) return null;
+  // Pakai ambang YANG SAMA dengan judul verdict di atas chart (callFor: >=60% condong naik,
+  // <=35% condong turun) — bukan leanFor (>50%) yang dipakai buildPoints/trackRecord untuk
+  // menilai riwayat. Kalau dua ambang ini beda, chart bisa menggambar garis hijau "naik" pas
+  // judulnya sendiri bilang "netral" — persis kebingungan yang mau dihindari.
+  const arah = callFor(pNow);
+  if (arah === 'netral') return { arah: 'netral', persen: 0, pakaiData: true, horizonHari: h };
+  // Angkanya tetap dari bucket "condong" (leanFor, >50%) yang sama dengan baris "AI" di kartu
+  // kiri ("Saat AI menebak naik (di atas 50%)") — cuma keputusan WARNA/ARAH yang pakai ambang lebih ketat.
+  const jumlah = arah === 'naik' ? record?.naikN : record?.turunN;
+  const rata = arah === 'naik' ? avgNaik : avgTurun;
+  const pakaiData = isNum(jumlah) && jumlah >= 5 && isNum(rata);
+  const besar = pakaiData ? Math.abs(rata) : 1.5;   // 1.5% = penanda arah saja, bukan perkiraan besaran
+  return { arah, persen: arah === 'naik' ? besar : -besar, pakaiData, horizonHari: h };
+}
