@@ -22,7 +22,7 @@ import {
   tanggalID, pct, signed, horizonHari, verdictFor, bacaAngka,
   isoFromEpoch, pricesFromChartJson, alignSeries, buildPoints, trackRecord,
   calibrationLookup, reliability, alignment, pickTechRows,
-  defaultHorizon, ringkasFitur, ringkasLolos, proyeksiHarga,
+  defaultHorizon, ringkasFitur, ringkasLolos, proyeksiHarga, ringkasBarisAI,
 } from './ai-insight-logic';
 
 const MIN_BAR_PROPS = 200;  // di bawah ini panel ambil harga 1 tahun sendiri (horizon panjang butuh riwayat)
@@ -270,8 +270,7 @@ export function AiInsightView({
   const align = useMemo(() => alignment(techRows, pNow), [techRows, pNow]);
   const kal = useMemo(() => calibrationLookup(kartu?.kalibrasi, pNow), [kartu, pNow]);
 
-  const aiWR = record && record.naikN >= 5 ? Math.round((record.naikHits / record.naikN) * 1000) / 10 : null;
-  const aiAvg = record && record.naikN >= 5 ? avgNaik : null;
+  const aiRow = useMemo(() => ringkasBarisAI(pNow, record, avgNaik, avgTurun), [pNow, record, avgNaik, avgTurun]);
   const fiturTeks = pred && pred.fitur ? ringkasFitur(pred.fitur) : '';
 
   // Garis proyeksi di chart (lihat proyeksiHarga di ai-insight-logic.js untuk penjelasan angkanya)
