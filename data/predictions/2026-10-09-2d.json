@@ -1,0 +1,1 @@
+{"tanggal":"2026-10-09","horizon":"2d","model":{"algoritma":"lightgbm","dilatih":"2026-10-05T19:33:37","akurasi_walk_forward":0.6047,"baseline_selalu_naik":0.3942,"auc":0.5798},"disclaimer":"Probabilitas statistik dari data historis. Bukan ramalan, bukan saran finansial.","prediksi":{}}

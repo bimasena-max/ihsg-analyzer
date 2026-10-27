@@ -1,127 +1,127 @@
 {
   "horizon": "1d",
   "algoritma": "lightgbm",
-  "dilatih": "2026-09-22T08:00:38",
-  "baris_latih": 194208,
+  "dilatih": "2026-10-26T17:10:54",
+  "baris_latih": 192524,
   "jumlah_ticker": 295,
-  "akurasi_walk_forward": 0.6378,
-  "baseline_selalu_naik": 0.3653,
-  "auc": 0.602,
+  "akurasi_walk_forward": 0.6319,
+  "baseline_selalu_naik": 0.371,
+  "auc": 0.5969,
   "lolos_baseline": true,
   "folds": [
     {
       "fold": 1,
-      "n_train": 26793,
-      "n_test": 28146,
-      "akurasi": 0.6513536559369004,
-      "auc": 0.6142403529183633,
-      "brier": 0.2192720657306656,
-      "baseline_selalu_naik": 0.34853975698145384,
-      "uji_dari": "2024-04-02",
-      "uji_sampai": "2024-09-03",
+      "n_train": 26710,
+      "n_test": 27732,
+      "akurasi": 0.6434083369392759,
+      "auc": 0.6068484343721237,
+      "brier": 0.22381969723661568,
+      "baseline_selalu_naik": 0.3573849704312707,
+      "uji_dari": "2024-05-15",
+      "uji_sampai": "2024-10-03",
       "embargo_hari": 1
     },
     {
       "fold": 2,
-      "n_train": 54941,
-      "n_test": 28206,
-      "akurasi": 0.6625186130610509,
-      "auc": 0.6075235680026463,
-      "brier": 0.21570625430928334,
-      "baseline_selalu_naik": 0.33702049209388074,
-      "uji_dari": "2024-09-04",
-      "uji_sampai": "2025-01-30",
+      "n_train": 54438,
+      "n_test": 27799,
+      "akurasi": 0.6677218604985791,
+      "auc": 0.6047958102917894,
+      "brier": 0.21373271300766244,
+      "baseline_selalu_naik": 0.3277456023597971,
+      "uji_dari": "2024-10-04",
+      "uji_sampai": "2025-02-27",
       "embargo_hari": 1
     },
     {
       "fold": 3,
-      "n_train": 83145,
-      "n_test": 27924,
-      "akurasi": 0.6359762211717519,
-      "auc": 0.6198443558511314,
-      "brier": 0.22158138608469713,
-      "baseline_selalu_naik": 0.3674258702191663,
-      "uji_dari": "2025-01-31",
-      "uji_sampai": "2025-07-09",
+      "n_train": 82241,
+      "n_test": 27487,
+      "akurasi": 0.6185833303015971,
+      "auc": 0.6155281074845544,
+      "brier": 0.22776518826882158,
+      "baseline_selalu_naik": 0.38603703568959874,
+      "uji_dari": "2025-02-28",
+      "uji_sampai": "2025-08-05",
       "embargo_hari": 1
     },
     {
       "fold": 4,
-      "n_train": 111076,
-      "n_test": 27745,
-      "akurasi": 0.6215894755811858,
-      "auc": 0.5970580435508289,
-      "brier": 0.23054923485759554,
-      "baseline_selalu_naik": 0.38943953865561365,
-      "uji_dari": "2025-07-10",
-      "uji_sampai": "2025-11-26",
+      "n_train": 109728,
+      "n_test": 27509,
+      "akurasi": 0.6277945399687375,
+      "auc": 0.5965620235440761,
+      "brier": 0.22969803001583322,
+      "baseline_selalu_naik": 0.3871460249372933,
+      "uji_dari": "2025-08-06",
+      "uji_sampai": "2025-12-22",
       "embargo_hari": 1
     },
     {
       "fold": 5,
-      "n_train": 138819,
-      "n_test": 27704,
-      "akurasi": 0.6187554143805949,
-      "auc": 0.5907511549663076,
-      "brier": 0.23166794502503094,
-      "baseline_selalu_naik": 0.39207334680912503,
-      "uji_dari": "2025-11-27",
-      "uji_sampai": "2026-04-30",
+      "n_train": 137236,
+      "n_test": 27386,
+      "akurasi": 0.6177243847221208,
+      "auc": 0.5744569195039466,
+      "brier": 0.2316963926302193,
+      "baseline_selalu_naik": 0.3799751697947857,
+      "uji_dari": "2025-12-23",
+      "uji_sampai": "2026-06-02",
       "embargo_hari": 1
     },
     {
       "fold": 6,
-      "n_train": 166525,
-      "n_test": 27401,
-      "akurasi": 0.6363636363636364,
-      "auc": 0.582827685349143,
-      "brier": 0.2243068785883906,
-      "baseline_selalu_naik": 0.3575052005401263,
-      "uji_dari": "2026-05-01",
-      "uji_sampai": "2026-09-22",
+      "n_train": 164624,
+      "n_test": 27619,
+      "akurasi": 0.6162424417973135,
+      "auc": 0.5832266078114965,
+      "brier": 0.231629521720599,
+      "baseline_selalu_naik": 0.38777653064919076,
+      "uji_dari": "2026-06-03",
+      "uji_sampai": "2026-10-23",
       "embargo_hari": 1
     }
   ],
   "kalibrasi": [
     {
-      "prediksi": 0.054,
-      "kenyataan": 0.049,
-      "n": 4025
+      "prediksi": 0.061,
+      "kenyataan": 0.051,
+      "n": 3444
     },
     {
-      "prediksi": 0.159,
-      "kenyataan": 0.177,
-      "n": 8086
+      "prediksi": 0.161,
+      "kenyataan": 0.193,
+      "n": 7605
     },
     {
       "prediksi": 0.26,
-      "kenyataan": 0.291,
-      "n": 29012
+      "kenyataan": 0.299,
+      "n": 28041
     },
     {
       "prediksi": 0.354,
-      "kenyataan": 0.37,
-      "n": 70218
+      "kenyataan": 0.372,
+      "n": 70077
     },
     {
-      "prediksi": 0.44,
-      "kenyataan": 0.429,
-      "n": 45014
+      "prediksi": 0.439,
+      "kenyataan": 0.432,
+      "n": 45663
     },
     {
       "prediksi": 0.535,
-      "kenyataan": 0.51,
-      "n": 9460
+      "kenyataan": 0.509,
+      "n": 9435
     },
     {
       "prediksi": 0.633,
-      "kenyataan": 0.605,
-      "n": 1103
+      "kenyataan": 0.597,
+      "n": 1047
     },
     {
       "prediksi": 0.734,
-      "kenyataan": 0.752,
-      "n": 202
+      "kenyataan": 0.744,
+      "n": 211
     }
   ],
   "catatan": "Metrik dari walk-forward out-of-sample. Bukan saran finansial."
