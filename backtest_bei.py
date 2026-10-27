@@ -69,6 +69,7 @@ SIG_RSI_QUIET       = "RSI Recovery Diam-diam"
 SIG_BREAKOUT        = "Breakout Konsolidasi"
 SIG_BPJS            = "BPJS Beli Pagi Jual Sore"
 SIG_BSJP            = "BSJP Beli Sore Jual Pagi"
+SIG_RS_BREAKOUT     = "Relative Strength Breakout vs IHSG"
 
 SIGNAL_CATEGORY = {
     SIG_RSI_BB:          "Swing",
@@ -88,7 +89,10 @@ SIGNAL_CATEGORY = {
     SIG_BREAKOUT:        "Pre-ARA",
     SIG_BPJS:            "Intraday",
     SIG_BSJP:            "Intraday",
+    SIG_RS_BREAKOUT:     "Swing",
 }
+
+RS_LOOKBACK = 60  # bar — rekor RS dicari dalam 60 hari bursa terakhir (~3 bulan)
 
 INTRADAY_SIGNALS = {SIG_BPJS, SIG_BSJP}
 
@@ -237,7 +241,7 @@ def calc_return(closes: np.ndarray, entry_idx: int, hold: int) -> Optional[float
 # SIGNAL DETECTOR (tidak berubah dari versi sebelumnya)
 # ══════════════════════════════════════════════════════════════════════════════
 
-def detect_signals(closes, opens, highs, lows, volumes, i: int):
+def detect_signals(closes, opens, highs, lows, volumes, i: int, ihsg_c=None):
     c  = closes[:i+1]
     o  = opens[:i+1]
     h  = highs[:i+1]
@@ -277,6 +281,21 @@ def detect_signals(closes, opens, highs, lows, volumes, i: int):
         signals.append((SIG_GOLDEN_CROSS, 85))
     if 30 < rsi14 < 45 and n >= 3 and c[-1] > c[-2] > c[-3]:
         signals.append((SIG_RSI_RECOVERY, 70))
+
+    # Relative Strength Breakout — RS = harga saham / level IHSG. Nyala kalau
+    # RS bikin rekor tertinggi baru dalam RS_LOOKBACK bar terakhir (saham ini
+    # ngalahin IHSG lebih kuat dari 3 bulan terakhir), DAN rekornya bukan cuma
+    # karena titik awal windownya kebetulan rendah (rs[-1] > rs[0] mastiin RS
+    # beneran naik sepanjang window, bukan muter doang).
+    # Riset: Levy 1967 (Journal of Finance), Geczy & Samonov 2013 ("212 Years
+    # of Price Momentum") — signifikan secara statistik.
+    if ihsg_c is not None and n >= RS_LOOKBACK + 1 and len(ihsg_c) >= n:
+        idx_win = ihsg_c[i + 1 - RS_LOOKBACK:i + 1]
+        c_win   = c[-RS_LOOKBACK:]
+        if not np.any(np.isnan(idx_win)) and np.all(idx_win > 0):
+            rs = c_win / idx_win
+            if rs[-1] >= rs.max() and rs[-1] > rs[0]:
+                signals.append((SIG_RS_BREAKOUT, 80))
 
     # Scalp
     if atr_r > 0.012:
@@ -425,6 +444,20 @@ def download_with_retry(sym, start_str, end_str, retries=3):
     return None
 
 
+def fetch_ihsg_series(start_str: str, end_str: str):
+    """Ambil IHSG composite (^JKSE) sekali buat semua ticker — dasar hitung
+    Relative Strength. Return pandas Series (index=tanggal, value=Close) atau
+    None kalau gagal, biar sinyal RS breakout dilewatin tanpa bikin crash."""
+    df = download_with_retry("^JKSE", start_str, end_str)
+    if df is None or len(df) == 0:
+        return None
+    df = flatten_columns(df)
+    if "Close" not in df.columns:
+        return None
+    s = df["Close"].dropna()
+    return s if len(s) > RS_LOOKBACK else None
+
+
 def flatten_columns(df: pd.DataFrame) -> pd.DataFrame:
     if isinstance(df.columns, pd.MultiIndex):
         df.columns = df.columns.get_level_values(0)
@@ -458,10 +491,13 @@ class TradeRow:
     # FIX BUG 4 — kolom sendiri untuk return native intraday/overnight.
     # Sebelumnya nilai ini dijejalkan ke ret_3d untuk BPJS/BSJP, jadi kolom
     # "3 hari" di UI sebenarnya angka 1 hari untuk dua sinyal itu.
-    ret_intraday: Optional[float] = None
-
-
-def backtest_ticker(ticker: str) -> List[TradeRow]:
+    ret_intraday: Optional[float] = None
+
+
+
+
+
+def backtest_ticker(ticker: str, ihsg_series=None) -> List[TradeRow]:
     sym        = f"{ticker}.JK"
     end_date   = datetime.today()
     start_date = end_date - timedelta(days=LOOKBACK_YEARS * 365 + 60)
@@ -489,6 +525,14 @@ def backtest_ticker(ticker: str) -> List[TradeRow]:
     volumes = df["Volume"].values.astype(float)
     dates   = df.index.tolist()
 
+    # Samain tanggal IHSG dengan tanggal dagang ticker ini. ffill buat jaga-jaga
+    # kalau ada hari ticker ini dagang tapi IHSG bolong (jarang, tapi aman).
+    ihsg_c = None
+    if ihsg_series is not None:
+        aligned = ihsg_series.reindex(df.index, method="ffill")
+        if aligned.notna().sum() >= RS_LOOKBACK:
+            ihsg_c = aligned.values.astype(float)
+
     sector = get_sector(ticker)
 
     rows: List[TradeRow] = []
@@ -500,7 +544,7 @@ def backtest_ticker(ticker: str) -> List[TradeRow]:
     # tapi di-exclude saat hitung stats.
     # Loop sampai bar terakhir yang ada sinyal (tidak perlu buffer 60 hari)
     for i in range(MIN_DATA_BARS, len(closes) - 1):
-        sigs = detect_signals(closes, opens, highs, lows, volumes, i)
+        sigs = detect_signals(closes, opens, highs, lows, volumes, i, ihsg_c)
 
         for sig_name, _ in sigs:
             if i - last_sig_bar.get(sig_name, -999) < 5:
@@ -649,31 +693,36 @@ def build_index_js_stats(df: pd.DataFrame) -> str:
                     ("ret_3d","3d"),("ret_5d","5d"),("ret_7d","7d"),
                     ("ret_14d","14d"),("ret_30d","30d"),("ret_60d","60d")]
 
+    MIN_N_GLOBAL = 30  # di bawah ini horizon itu dilewatin sama sekali (bukan cuma gak kepilih)
+
     for sig, grp in df.groupby("signal"):
         bh_parts = []
-        best_wr, best_h = 0, "7d"
+        rep_n, rep_h = -1, None  # horizon "wakil" dipilih dari SAMPEL TERBANYAK, bukan WR tertinggi —
+                                  # biar gak cherry-pick hasil, cuma milih yang datanya paling kuat
 
         for col, h in horizon_cols:
             rets = grp[col].dropna()
             n = len(rets)
-            if n == 0:
+            if n < MIN_N_GLOBAL:
                 continue
             wr  = round((rets > 0).mean() * 100, 1)
             avg = round(rets.mean(), 2)
-            bh_parts.append(f"'{h}':{{wr:{wr},avg:{avg}}}")
-            if wr > best_wr:
-                best_wr, best_h = wr, h
+            bh_parts.append(f"'{h}':{{wr:{wr},avg:{avg},n:{n}}}")
+            if n > rep_n:
+                rep_n, rep_h = n, h
 
-        # Gunakan best horizon untuk top-level stats
-        best_col = f"ret_{best_h}"
-        best_rets = grp[best_col].dropna()
-        n_total = len(best_rets)
-        avg_best = round(best_rets.mean(), 2)
+        if rep_h is None:  # semua horizon di bawah sampel minimal — jangan nampilin apa-apa
+            continue
+
+        rep_col  = f"ret_{rep_h}"
+        rep_rets = grp[rep_col].dropna()
+        rep_wr   = round((rep_rets > 0).mean() * 100, 1)
+        avg_rep  = round(rep_rets.mean(), 2)
 
         bh_str = ", ".join(bh_parts)
         lines.append(f"  '{sig}': {{")
-        lines.append(f"    winRate: {best_wr}, avgRet: {avg_best}, bestHorizon: '{best_h} hari',")
-        lines.append(f"    holdDays: '—', count: {n_total},")
+        lines.append(f"    winRate: {rep_wr}, avgRet: {avg_rep}, bestHorizon: '{rep_h} hari',")
+        lines.append(f"    holdDays: '—', count: {rep_n},")
         lines.append(f"    byHorizon: {{ {bh_str} }},")
         lines.append(f"  }},")
 
@@ -684,16 +733,18 @@ def build_index_js_stats(df: pd.DataFrame) -> str:
     lines.append("// ── Per-ticker backtest stats ──")
     lines.append("const TICKER_SIGNAL_STATS = {")
 
+    MIN_N_TICKER = 20  # dulu 3 — kekecilan, gampang nyangkut 100% kebetulan (lihat catatan di atas)
+
     for ticker, tgrp in df.groupby("ticker"):
         sig_parts = []
         for sig, sgrp in tgrp.groupby("signal"):
             bh_parts = []
-            best_wr, best_h = 0, "7d"
+            rep_n, rep_h = -1, None  # sama kayak di atas: wakilnya dari sampel TERBANYAK, bukan WR tertinggi
 
             for col, h in horizon_cols:
                 rets = sgrp[col].dropna()
                 n = len(rets)
-                if n < 3:  # skip kalau sampel terlalu kecil
+                if n < MIN_N_TICKER:
                     continue
                 wr  = round((rets > 0).mean() * 100, 1)
                 avg = round(rets.mean(), 2)
@@ -706,21 +757,19 @@ def build_index_js_stats(df: pd.DataFrame) -> str:
                     f"'{h}':{{wr:{wr},avg:{avg},n:{n},"
                     f"p10:{p10},p25:{p25},p50:{p50},p75:{p75},p90:{p90}}}"
                 )
-                if wr > best_wr:
-                    best_wr, best_h = wr, h
+                if n > rep_n:
+                    rep_n, rep_h = n, h
 
-            if not bh_parts:
+            if rep_h is None:  # saham+sinyal ini belum ada horizon dengan sampel cukup — jangan tampilin
                 continue
 
-            best_col = f"ret_{best_h}"
-            best_rets = sgrp[best_col].dropna()
-            n_total = len(best_rets)
-            if n_total < 3:
-                continue
-            avg_best = round(best_rets.mean(), 2)
+            rep_col  = f"ret_{rep_h}"
+            rep_rets = sgrp[rep_col].dropna()
+            rep_wr   = round((rep_rets > 0).mean() * 100, 1)
+            avg_rep  = round(rep_rets.mean(), 2)
             bh_str = ", ".join(bh_parts)
             sig_parts.append(
-                f"    '{sig}': {{wr:{best_wr},avg:{avg_best},best:'{best_h}',n:{n_total},bh:{{{bh_str}}}}}"
+                f"    '{sig}': {{wr:{rep_wr},avg:{avg_rep},best:'{rep_h}',n:{rep_n},bh:{{{bh_str}}}}}"
             )
 
         if sig_parts:
@@ -796,11 +845,20 @@ def main():
     print(f"   Workers: {MAX_WORKERS} | Commission: {COMMISSION_PCT}%")
     print(f"   BUG FIXES: early exit NaN + intraday multi-horizon\n")
 
+    end_date   = datetime.today()
+    start_date = end_date - timedelta(days=LOOKBACK_YEARS * 365 + 60)
+    print("📊 Ambil IHSG composite (^JKSE) buat Relative Strength Breakout...")
+    ihsg_series = fetch_ihsg_series(start_date.strftime("%Y-%m-%d"), end_date.strftime("%Y-%m-%d"))
+    if ihsg_series is None:
+        print("   ⚠️  Gagal / data IHSG kurang — sinyal Relative Strength Breakout dilewatin, sinyal lain jalan normal.\n")
+    else:
+        print(f"   ✅ {len(ihsg_series)} bar IHSG ter-ambil.\n")
+
     all_rows: List[TradeRow] = []
     failed = []
 
     with ThreadPoolExecutor(max_workers=MAX_WORKERS) as ex:
-        futures = {ex.submit(backtest_ticker, t): t for t in tickers}
+        futures = {ex.submit(backtest_ticker, t, ihsg_series): t for t in tickers}
         with tqdm(total=len(tickers), unit="ticker", ncols=72) as pbar:
             for fut in as_completed(futures):
                 t = futures[fut]

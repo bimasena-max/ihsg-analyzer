@@ -22,7 +22,10 @@ import pandas as pd
 
 CSV = sys.argv[1] if len(sys.argv) > 1 else "backtest_trades_v2.csv"
 OUT = os.path.join("data", "backtest")
-MIN_TRADES_PER_TICKER = 5
+MIN_TRADES_PER_TICKER = 20   # dulu 5 — kekecilan, gampang nyangkut "100%" kebetulan
+MIN_N_HORIZON_TICKER = 20    # horizon per saham dengan sampel di bawah ini dibuang
+MIN_N_HORIZON_GLOBAL = 30    # sama, untuk statistik global
+DEFAULT_HORIZON = "5d"       # horizon wakil kalau sampelnya cukup
 
 # Urutan ini menentukan urutan tab horizon di UI.
 HORIZONS = [("ret_1d", "1d"), ("ret_2d", "2d"), ("ret_3d", "3d"), ("ret_5d", "5d"),
@@ -45,21 +48,27 @@ def stats_block(series: pd.Series) -> dict | None:
     }
 
 
-def by_horizon(df: pd.DataFrame) -> dict:
+def by_horizon(df: pd.DataFrame, min_n: int) -> dict:
     out = {}
     for col, key in HORIZONS:
         if col not in df.columns:
             continue          # horizon belum di-backtest — dilewati, bukan diisi nol
         blk = stats_block(df[col])
-        if blk:
+        if blk and blk["n"] >= min_n:   # sampel kekecilan = jangan ditampilkan sama sekali
             out[key] = blk
     return out
 
 
 def best_horizon(bh: dict) -> str | None:
-    # "Terbaik" = win rate tertinggi dengan sampel minimal layak.
-    layak = {k: v for k, v in bh.items() if v["n"] >= 10} or bh
-    return max(layak, key=lambda k: layak[k]["wr"]) if layak else None
+    # Horizon wakil dipilih BUKAN dari winrate tertinggi (itu cherry-pick:
+    # nyoba 8 horizon, ambil yang paling beruntung). Pakai horizon standar
+    # kalau sampelnya cukup, kalau tidak pakai yang sampelnya paling banyak.
+    # Nama fungsi/field "best" dipertahankan supaya frontend tidak perlu diubah.
+    if not bh:
+        return None
+    if DEFAULT_HORIZON in bh:
+        return DEFAULT_HORIZON
+    return max(bh, key=lambda k: bh[k]["n"])
 
 
 def main():
@@ -78,7 +87,7 @@ def main():
     # ── global per sinyal ──
     global_stats = {}
     for signal, g in df.groupby("signal"):
-        bh = by_horizon(g)
+        bh = by_horizon(g, MIN_N_HORIZON_GLOBAL)
         if not bh:
             continue
         bestk = best_horizon(bh)
@@ -102,13 +111,13 @@ def main():
         for signal, g in gt.groupby("signal"):
             if len(g) < MIN_TRADES_PER_TICKER:
                 continue      # sampel terlalu kecil untuk dipercaya
-            bh = by_horizon(g)
+            bh = by_horizon(g, MIN_N_HORIZON_TICKER)
             if not bh:
                 continue
             bestk = best_horizon(bh)
             per_signal[signal] = {
                 "wr": bh[bestk]["wr"], "avg": bh[bestk]["avg"],
-                "best": bestk, "n": int(len(g)), "bh": bh,
+                "best": bestk, "n": bh[bestk]["n"], "bh": bh,
             }
         if not per_signal:
             continue
